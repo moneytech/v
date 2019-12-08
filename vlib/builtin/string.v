@@ -4,6 +4,8 @@
 
 module builtin
 
+import strconv
+
 /*
 NB: A V string should be/is immutable from the point of view of
     V user programs after it is first created. A V string is
@@ -41,9 +43,8 @@ NB: A V string should be/is immutable from the point of view of
     when used with modules using C functions (for example os and so on).
 */
 
-import strconv
 
-struct string {
+pub struct string {
 //mut:
 	//hash_cache int
 pub:
@@ -51,21 +52,16 @@ pub:
 	len int     // the length of the .str field, excluding the ending 0 byte. It is always equal to strlen(.str).
 }
 
-struct ustring {
+pub struct ustring {
 pub:
 	s     string
 	runes []int
 	len   int
 }
 
-// For C strings only
-fn C.strlen(s byteptr) int
-
 pub fn vstrlen(s byteptr) int {
-	return C.strlen(*char(s))
-}	
-
-fn todo() { }
+	return C.strlen(charptr(s))
+}
 
 // Converts a C string to a V string.
 // String data is reused, not copied.
@@ -89,7 +85,7 @@ pub fn tos_clone(s byteptr) string {
 
 // Same as `tos`, but calculates the length. Called by `string(bytes)` casts.
 // Used only internally.
-fn tos2(s byteptr) string {
+pub fn tos2(s byteptr) string {
 	if s == 0 {
 		panic('tos2: nil string')
 	}
@@ -99,7 +95,8 @@ fn tos2(s byteptr) string {
 	}
 }
 
-fn tos3(s *C.char) string {
+// Same as `tos2`, but for char*, to avoid warnings
+pub fn tos3(s charptr) string {
 	if s == 0 {
 		panic('tos3: nil string')
 	}
@@ -128,6 +125,19 @@ pub fn (s string) cstr() byteptr {
 }
 */
 
+// cstring_to_vstring creates a copy of cstr and turns it into a v string
+pub fn cstring_to_vstring(cstr byteptr) string {
+	slen := C.strlen(cstr)
+	mut s := byteptr( memdup(cstr, slen+1) )
+	s[slen] = `\0`
+	return tos(s, slen)
+}
+
+pub fn (s string) replace_once(rep, with string) string {
+	index := s.index(rep) or { return s }
+	return s.substr(0,index) + with + s.substr(index + rep.len, s.len)
+}
+
 pub fn (s string) replace(rep, with string) string {
 	if s.len == 0 || rep.len == 0 {
 		return s
@@ -138,8 +148,7 @@ pub fn (s string) replace(rep, with string) string {
 	mut rem := s
 	mut rstart := 0
 	for {
-		mut i := rem.index(rep)
-		if i < 0 {break}
+		mut i := rem.index(rep) or { break }
 		idxs << rstart + i
 		i += rep.len
 		rstart += i
@@ -181,29 +190,29 @@ pub fn (s string) replace(rep, with string) string {
 	return tos(b, new_len)
 }
 
+
 pub fn (s string) int() int {
-	return strconv.parse_int(s, 0, 32)
+	return int(strconv.common_parse_int(s,0,32, false, false))
 }
 
-
 pub fn (s string) i64() i64 {
-	return strconv.parse_int(s, 0, 64)
+	return strconv.common_parse_int(s, 0, 64, false, false)
 }
 
 pub fn (s string) f32() f32 {
-	return C.atof(*char(s.str))
+	return C.atof(charptr(s.str))
 }
 
 pub fn (s string) f64() f64 {
-	return C.atof(*char(s.str))
+	return C.atof(charptr(s.str))
 }
 
 pub fn (s string) u32() u32 {
-	return strconv.parse_uint(s, 0, 32)
+	return u32(strconv.common_parse_uint(s, 0, 32, false, false))
 }
 
 pub fn (s string) u64() u64 {
-	return strconv.parse_uint(s, 0, 64)
+	return strconv.common_parse_uint(s, 0, 64, false, false)
 }
 
 // ==
@@ -276,70 +285,50 @@ fn (s string) add(a string) string {
 }
 
 pub fn (s string) split(delim string) []string {
-	// println('string split delim="$delim" s="$s"')
+	return s.split_nth(delim, 0)
+}
+
+pub fn (s string) split_nth(delim string, nth int) []string {
 	mut res := []string
+	mut i := 0
 	if delim.len == 0 {
-		res << s
+		i = 1
+		for ch in s {
+			if nth > 0 && i >= nth {
+				res << s.substr(i, s.len)
+				break
+			}
+			res << ch.str()
+			i++
+		}
 		return res
 	}
-	if delim.len == 1 {
-		return s.split_single(delim[0])
-	}
-	mut i := 0
-	mut start := 0// - 1
-	for i < s.len {
-		// printiln(i)
-		mut a := s[i] == delim[0]
-		mut j := 1
-		for j < delim.len && a {
-			a = a && s[i + j] == delim[j]
+	mut start := 0
+	for i <= s.len {
+		mut is_delim := s[i] == delim[0]
+		mut j := 0
+		for is_delim && j < delim.len {
+			is_delim = is_delim && s[i + j] == delim[j]
 			j++
 		}
+		was_last := nth > 0 && res.len == nth
+		if was_last{break}
 		last := i == s.len - 1
-		if a || last {
-			if last {
+		if is_delim || last {
+			if !is_delim && last {
 				i++
 			}
 			mut val := s.substr(start, i)
-			// println('got it "$val" start=$start i=$i delim="$delim"')
-			if val.len > 0 {
-				// todo perf
-				// val now is '___VAL'. remove '___' from the start
-				if val.starts_with(delim) {
-					// println('!!')
-					val = val.right(delim.len)
-				}
-				res << val.trim_space()
+			if val.starts_with(delim) {
+				val = val.right(delim.len)
 			}
-			start = i
+			res << val
+			start = i + delim.len
 		}
 		i++
 	}
-	return res
-}
-
-pub fn (s string) split_single(delim byte) []string {
-	mut res := []string
-	if int(delim) == 0 {
-		res << s
-		return res
-	}
-	mut i := 0
-	mut start := 0
-	for i < s.len {
-		is_delim := s[i] == delim
-		last := i == s.len - 1
-		if is_delim || last {
-			if !is_delim && i == s.len - 1 {
-				i++
-			}
-			val := s.substr(start, i)
-			if val.len > 0 {
-				res << val
-			}
-			start = i + 1
-		}
-		i++
+	if s.ends_with (delim) && (nth < 1 || res.len < nth) {
+		res << ''
 	}
 	return res
 }
@@ -365,22 +354,27 @@ pub fn (s string) split_into_lines() []string {
 }
 
 // 'hello'.left(2) => 'he'
-pub fn (s string) left(n int) string {
+fn (s string) left(n int) string {
 	if n >= s.len {
 		return s
 	}
 	return s.substr(0, n)
 }
 // 'hello'.right(2) => 'llo'
-pub fn (s string) right(n int) string {
+fn (s string) right(n int) string {
 	if n >= s.len {
 		return ''
 	}
 	return s.substr(n, s.len)
 }
 
-// substr
-pub fn (s string) substr(start, end int) string {
+// used internally for [2..4]
+fn (s string) substr2(start, _end int, end_max bool) string {
+	end := if end_max { s.len } else { _end }
+	return s.substr(start, end)
+}
+
+fn (s string) substr(start, end int) string {
 	if start > end || start > s.len || end > s.len || start < 0 || end < 0 {
 		panic('substr($start, $end) out of bounds (len=$s.len)')
 	}
@@ -404,7 +398,7 @@ pub fn (s string) substr(start, end int) string {
 	return res
 }
 
-pub fn (s string) index(p string) int {
+pub fn (s string) index_old(p string) int {
 	if p.len > s.len {
 		return -1
 	}
@@ -420,6 +414,24 @@ pub fn (s string) index(p string) int {
 		i++
 	}
 	return -1
+}
+
+pub fn (s string) index(p string) ?int {
+	if p.len > s.len {
+		return none
+	}
+	mut i := 0
+	for i < s.len {
+		mut j := 0
+		for j < p.len && s[i + j] == p[j] {
+			j++
+		}
+		if j == p.len {
+			return i
+		}
+		i++
+	}
+	return none
 }
 
 // KMP search
@@ -456,10 +468,8 @@ pub fn (s string) index_kmp(p string) int {
 
 pub fn (s string) index_any(chars string) int {
 	for c in chars {
-		index := s.index(c.str())
-		if index != -1 {
-			return index
-		}
+		index := s.index(c.str()) or { continue }
+		return index
 	}
 	return -1
 }
@@ -549,13 +559,15 @@ pub fn (s string) count(substr string) int {
 }
 
 pub fn (s string) contains(p string) bool {
-	res := s.index(p) > 0 - 1
-	return res
+	_ = s.index(p) or {
+		return false
+	}
+	return true
 }
 
 pub fn (s string) starts_with(p string) bool {
-	res := s.index(p) == 0
-	return res
+	idx := s.index(p) or { return false }
+	return idx == 0
 }
 
 pub fn (s string) ends_with(p string) bool {
@@ -598,22 +610,16 @@ pub fn (s string) title() string {
 	}
 	title := tit.join(' ')
 
-	return title	
+	return title
 }
 
 // 'hey [man] how you doin'
 // find_between('[', ']') == 'man'
 pub fn (s string) find_between(start, end string) string {
-	start_pos := s.index(start)
-	if start_pos == -1 {
-		return ''
-	}
+	start_pos := s.index(start) or { return '' }
 	// First get everything to the right of 'start'
 	val := s.right(start_pos + start.len)
-	end_pos := val.index(end)
-	if end_pos == -1 {
-		return val
-	}
+	end_pos := val.index(end) or { return val }
 	return val.left(end_pos)
 }
 
@@ -960,10 +966,7 @@ fn (arr []string) free() {
 
 // all_before('23:34:45.234', '.') == '23:34:45'
 pub fn (s string) all_before(dot string) string {
-	pos := s.index(dot)
-	if pos == -1 {
-		return s
-	}
+	pos := s.index(dot) or { return s }
 	return s.left(pos)
 }
 
@@ -1023,19 +1026,19 @@ pub fn (s []string) join_lines() string {
 	return s.join('\n')
 }
 
+// reverse will return a new reversed string.
 pub fn (s string) reverse() string {
 	mut res := string {
 		len: s.len
 		str: malloc(s.len)
 	}
-
 	for i := s.len - 1; i >= 0; i-- {
-				res[s.len-i-1] = s[i]
+		res[s.len-i-1] = s[i]
 	}
-
 	return res
 }
 
+// limit returns a portion of the string, starting at `0` and extending for a given number of characters afterward.
 // 'hello'.limit(2) => 'he'
 // 'hi'.limit(10) => 'hi'
 pub fn (s string) limit(max int) string {
@@ -1066,14 +1069,14 @@ pub fn (s string) hash() int {
 
 pub fn (s string) bytes() []byte {
 	if s.len == 0 {
-		return []byte
+		return []
 	}
 	mut buf := [byte(0)].repeat(s.len)
 	C.memcpy(buf.data, s.str, s.len)
 	return buf
 }
 
-// Returns a new string with a specified number of copies of the string it was called on.
+// repeat returns a new string with a specified number of copies of the string it was called on.
 pub fn (s string) repeat(count int) string {
 	if count <= 1 {
 		return s

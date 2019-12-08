@@ -85,7 +85,7 @@ pub fn (_rune string) utf32_code() int {
 	for i := 1; i < _rune.len; i++ {
 		c := int(_rune[i])
 		res = res << shift
-		res |= c & 63 /* 0x3f */
+		res |= c & 63 // 0x3f
 		shift = 6
 	}
 	return res
@@ -96,22 +96,22 @@ const (
 	)
 
 pub fn (_str string) to_wide() &u16 {
-    $if windows {
-   	    num_chars := int(C.MultiByteToWideChar(CP_UTF8, 0, _str.str, _str.len, 0, 0))
-	    mut wstr := &u16(malloc((num_chars + 1) * 2)) // sizeof(wchar_t)
-	    if wstr > 0 {
-		    C.MultiByteToWideChar(CP_UTF8, 0, _str.str, _str.len, wstr, num_chars)
-		    C.memset(&byte(wstr) + num_chars * 2, 0, 2)
-	    }
-	    return wstr
-    } $else {
-        return 0
-    }
+	$if windows {
+		num_chars := (C.MultiByteToWideChar(CP_UTF8, 0, _str.str, _str.len, 0, 0))
+		mut wstr := &u16(malloc((num_chars + 1) * 2)) // sizeof(wchar_t)
+		if !isnil(wstr) {
+			C.MultiByteToWideChar(CP_UTF8, 0, _str.str, _str.len, wstr, num_chars)
+			C.memset(&byte(wstr) + num_chars * 2, 0, 2)
+		}
+		return wstr
+	} $else {
+		return 0
+	}
 }
 
 pub fn string_from_wide(_wstr &u16) string {
     $if windows {
-	    wstr_len := int(C.wcslen(_wstr))
+	    wstr_len := C.wcslen(_wstr)
 	    return string_from_wide2(_wstr, wstr_len)
     } $else {
         return ''
@@ -120,11 +120,11 @@ pub fn string_from_wide(_wstr &u16) string {
 
 pub fn string_from_wide2(_wstr &u16, len int) string {
     $if windows {
-    	num_chars := int(C.WideCharToMultiByte(CP_UTF8, 0, _wstr, len, 0, 0, 0, 0))
-    	mut str_to := &byte(malloc(num_chars + 1))
-    	if str_to > 0 {
+    	num_chars := C.WideCharToMultiByte(CP_UTF8, 0, _wstr, len, 0, 0, 0, 0)
+    	mut str_to := malloc(num_chars + 1)
+    	if !isnil(str_to) {
     		C.WideCharToMultiByte(CP_UTF8, 0, _wstr, len, str_to, num_chars, 0, 0)
-		    C.memset(&byte(str_to) + num_chars, 0, 1)
+		    C.memset(str_to + num_chars, 0, 1)
 	    }
 	    return tos2(str_to)
     } $else {
@@ -155,7 +155,7 @@ fn utf8_len(c byte) int {
 
 // Reads an utf8 character from standard input
 pub fn utf8_getchar() int {
-  c := int(C.getchar())
+  c := C.getchar()
   len := utf8_len(~c)
   if c < 0 {
     return 0
@@ -164,12 +164,12 @@ pub fn utf8_getchar() int {
   } else if len == 1 {
     return -1
   } else {
-    mut uc := int(c & ((1 << (7 - len)) - 1))
+    mut uc := c & ((1 << (7 - len)) - 1)
     for i := 0; i + 1 < len; i++ {
-      c2 := int(C.getchar())
+      c2 := C.getchar()
       if c2 != -1 && (c2 >> 6) == 2 {
         uc <<= 6
-        uc |= int((c2 & 63))
+        uc |= (c2 & 63)
       }  else if c2 == -1 {
         return 0
       } else {

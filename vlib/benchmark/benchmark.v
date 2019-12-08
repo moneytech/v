@@ -9,9 +9,9 @@ Example usage of this module:
 import benchmark
 mut bmark := benchmark.new_benchmark()
 // by default the benchmark will be verbose, i.e. it will include timing information
-// if you want it to be silent, set bmark.verbose = false 
-for { 
-   bmark.step() // call this when you want to advance the benchmark. 
+// if you want it to be silent, set bmark.verbose = false
+for {
+   bmark.step() // call this when you want to advance the benchmark.
                 // The timing info in bmark.step_message will be measured starting from the last call to bmark.step
    ....
 
@@ -26,7 +26,7 @@ println( bmark.total_message('remarks about the benchmark') )
 ```
 */
 
-struct Benchmark{
+pub struct Benchmark{
 pub mut:
 	bench_start_time i64
 	bench_end_time i64
@@ -81,11 +81,11 @@ pub fn (b mut Benchmark) neither_fail_nor_ok() {
 	b.step_end_time = benchmark.now()
 }
 
-pub fn (b mut Benchmark) step_message(msg string) string {
+pub fn (b &Benchmark) step_message(msg string) string {
 	return b.tdiff_in_ms(msg, b.step_start_time, b.step_end_time)
 }
 
-pub fn (b mut Benchmark) total_message(msg string) string {
+pub fn (b &Benchmark) total_message(msg string) string {
 	mut tmsg := '$msg \n ok, fail, total = ' +
 		term.ok_message('${b.nok:5d}') + ', ' +
 		if b.nfail > 0 { term.fail_message('${b.nfail:5d}') } else { '${b.nfail:5d}' } + ', ' +
@@ -96,15 +96,15 @@ pub fn (b mut Benchmark) total_message(msg string) string {
 	return b.tdiff_in_ms(tmsg, b.bench_start_time, b.bench_end_time)
 }
 
-pub fn (b mut Benchmark) total_duration() i64 {
+pub fn (b &Benchmark) total_duration() i64 {
 	return (b.bench_end_time - b.bench_start_time)
 }
 ////////////////////////////////////////////////////////////////////
 
-fn (b mut Benchmark) tdiff_in_ms(s string, sticks i64, eticks i64) string {
+fn (b &Benchmark) tdiff_in_ms(s string, sticks i64, eticks i64) string {
 	if b.verbose {
 		tdiff := (eticks - sticks)
-		return '${tdiff:6d} ms | $s'
+		return '${tdiff:6lld} ms | $s'
 	}
 	return s
 }

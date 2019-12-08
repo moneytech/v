@@ -19,11 +19,11 @@ pub fn panic(s string) {
 }
 
 pub fn println(s string) {
-	#console.log(s)
+	#console.log(s.str)
 }
 
 pub fn eprintln(s string) {
-	#console.log(s)
+	#console.error(s)
 }
 
 pub fn print(s string) {

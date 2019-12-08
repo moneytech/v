@@ -3,8 +3,8 @@ module compiler
 import os
 
 #flag windows -l shell32
-
-// RegOpenKeyExA etc
+#flag windows -l dbghelp
+// RegOpenKeyExW etc
 #flag windows -l advapi32
 
 struct MsvcResult {
@@ -145,7 +145,7 @@ fn find_vs(vswhere_dir string, host_arch string) ?VsInstallation {
 	// If its not there then end user needs to update their visual studio
 	// installation!
 	
-	res := os.exec('""$vswhere_dir\\Microsoft Visual Studio\\Installer\\vswhere.exe" -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath"') or {
+	res := os.exec('"$vswhere_dir\\Microsoft Visual Studio\\Installer\\vswhere.exe" -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath') or {
 		return error(err)
 	}
 	// println('res: "$res"')
@@ -158,7 +158,7 @@ fn find_vs(vswhere_dir string, host_arch string) ?VsInstallation {
 	// println('version: $version')
 
 	v := if version.ends_with('\n') {
-		version.left(version.len - 2)
+		version[..version.len - 2]
 	} else {
 		version
 	}
@@ -166,7 +166,7 @@ fn find_vs(vswhere_dir string, host_arch string) ?VsInstallation {
 	lib_path := '$res.output\\VC\\Tools\\MSVC\\$v\\lib\\$host_arch'
 	include_path := '$res.output\\VC\\Tools\\MSVC\\$v\\include'
 
-	if os.file_exists('$lib_path\\vcruntime.lib') {
+	if os.exists('$lib_path\\vcruntime.lib') {
 		p := '$res.output\\VC\\Tools\\MSVC\\$v\\bin\\Host$host_arch\\$host_arch'
 
 		// println('$lib_path $include_path')
@@ -267,12 +267,14 @@ pub fn (v mut V) cc_msvc() {
 
 	//alibs := []string // builtin.o os.o http.o etc
 	if v.pref.build_mode == .build_module {
+		// Compile only
+		a << '/c'
 	}
 	else if v.pref.build_mode == .default_mode {
 		/*
 		b := os.realpath( '$v_modules_path/vlib/builtin.obj' )
 		alibs << '"$b"'
-		if !os.file_exists(b) {
+		if !os.exists(b) {
 			println('`builtin.obj` not found')
 			exit(1)
 		}
@@ -348,7 +350,7 @@ pub fn (v mut V) cc_msvc() {
 	
 	args := a.join(' ')
 
-	cmd := '""$r.full_cl_exe_path" $args"'
+	cmd := '"$r.full_cl_exe_path" $args'
 	// It is hard to see it at first, but the quotes above ARE balanced :-| ...
 	// Also the double quotes at the start ARE needed.
 	if v.pref.show_c_cmd || v.pref.is_verbose {
@@ -388,7 +390,7 @@ fn build_thirdparty_obj_file_with_msvc(path string, moduleflags []CFlag) {
 
 	obj_path = os.realpath(obj_path)
 
-	if os.file_exists(obj_path) {
+	if os.exists(obj_path) {
 		println('$obj_path already build.')
 		return
 	}
@@ -410,11 +412,17 @@ fn build_thirdparty_obj_file_with_msvc(path string, moduleflags []CFlag) {
 
 	btarget := moduleflags.c_options_before_target_msvc()
 	atarget := moduleflags.c_options_after_target_msvc()
-	cmd := '""$msvc.full_cl_exe_path" /volatile:ms /Zi /DNDEBUG $include_string /c $btarget $cfiles $atarget /Fo"$obj_path""'
+	cmd := '"$msvc.full_cl_exe_path" /volatile:ms /Zi /DNDEBUG $include_string /c $btarget $cfiles $atarget /Fo"$obj_path"'
 	//NB: the quotes above ARE balanced.
 	println('thirdparty cmd line: $cmd')
 	res := os.exec(cmd) or {
+		println('msvc: failed thirdparty object build cmd: $cmd')
 		verror(err)
+		return
+	}
+	if res.exit_code != 0 {
+		println('msvc: failed thirdparty object build cmd: $cmd')
+		verror(res.output)
 		return
 	}
 	println(res.output)

@@ -87,13 +87,44 @@ fn test_sort() {
 	assert vals[3] == 'arr'
 }
 
+fn test_split_nth() {
+	a := "1,2,3"
+	assert (a.split(',').len == 3)
+	assert (a.split_nth(',', -1).len == 3)
+	assert (a.split_nth(',', 0).len == 3)
+	assert (a.split_nth(',', 1).len == 1)
+	assert (a.split_nth(',', 2).len == 2)
+	assert (a.split_nth(',', 10).len == 3)
+	b := "1::2::3"
+	assert (b.split('::').len == 3)
+	assert (b.split_nth('::', -1).len == 3)
+	assert (b.split_nth('::', 0).len == 3)
+	assert (b.split_nth('::', 1).len == 1)
+	assert (b.split_nth('::', 2).len == 2)
+	assert (b.split_nth('::', 10).len == 3)
+	c := "ABCDEF"
+	assert (c.split('').len == 6)
+	assert (c.split_nth('', 3).len == 3)
+	assert (c.split_nth('BC', -1).len == 2)
+	d := ","
+	assert (d.split(',').len == 2)
+	assert (d.split_nth('', 3).len == 1)
+	assert (d.split_nth(',', -1).len == 2)
+	assert (d.split_nth(',', 3).len == 2)
+	e := ",,,0,,,,,a,,b,"
+	// assert (e.split(',,').len == 5)
+	// assert (e.split_nth(',,', 3).len == 2)
+	assert (e.split_nth(',', -1).len == 12)
+	assert (e.split_nth(',', 3).len == 3)
+}
+
 fn test_split() {
 	mut s := 'volt/twitch.v:34'
 	mut vals := s.split(':')
 	assert vals.len == 2
 	assert vals[0] == 'volt/twitch.v'
 	assert vals[1] == '34'
-	// /////////	
+	// /////////
 	s = '2018-01-01z13:01:02'
 	vals = s.split('z')
 	assert vals.len == 2
@@ -109,10 +140,22 @@ fn test_split() {
 	// /////////
 	s = 'lalala'
 	vals = s.split('a')
-	assert vals.len == 3
+	assert vals.len == 4
 	assert vals[0] == 'l'
 	assert vals[1] == 'l'
 	assert vals[2] == 'l'
+	assert vals[3] == ''
+	// /////////
+	s = 'awesome'
+	a := s.split('')
+	assert a.len == 7
+	assert a[0] == 'a'
+	assert a[1] == 'w'
+	assert a[2] == 'e'
+	assert a[3] == 's'
+	assert a[4] == 'o'
+	assert a[5] == 'm'
+	assert a[6] == 'e'
 }
 
 fn test_trim_space() {
@@ -170,9 +213,9 @@ fn test_replace() {
 	assert lol.replace('lol', 'LOL') == 'LOL LOL LOL'
 	b = 'oneBtwoBBthree'
 	assert b.replace('B', '') == 'onetwothree'
-	b = '**char'
-	assert b.replace('*char', 'byteptr') == '*byteptr'
-	mut c :='abc'
+	b = '*charptr'
+	assert b.replace('charptr', 'byteptr') == '*byteptr'
+	c :='abc'
 	assert c.replace('','-') == c
 }
 
@@ -208,6 +251,12 @@ fn test_runes() {
 	assert u.len == 6
 	assert s2.substr(1, 4).len == 3
 	assert s2.substr(1, 4) == 'riv'
+	assert s2[1..4].len == 3
+	assert s2[1..4] == 'riv'
+	assert s2[..4].len == 4
+	assert s2[..4] == 'priv'
+	assert s2[2..].len == 4
+	assert s2[2..] == 'ivet'
 	assert u.substr(1, 4).len == 6
 	assert u.substr(1, 4) == 'рив'
 	assert s2.substr(1, 2) == 'r'
@@ -254,7 +303,7 @@ fn test_upper() {
 fn test_left_right() {
 	s := 'ALOHA'
 	assert s.left(3) == 'ALO'
-	assert s.right(3) == 'HA'
+	assert s[3..] == 'HA'
 	u := s.ustring()
 	assert u.left(3) == 'ALO'
 	assert u.right(3) == 'HA'
@@ -397,7 +446,7 @@ fn test_capitalize() {
 }
 
 fn test_title() {
-	mut s := 'hello world'
+	s := 'hello world'
 	assert s.title() == 'Hello World'
 	s.to_upper()
 	assert s.title() == 'Hello World'
@@ -474,11 +523,53 @@ fn test_raw() {
 	lines := raw.split('\n')
 	assert lines.len == 1
 	println('raw string: "$raw"')
-}	
+}
 
 fn test_escape() {
 	// TODO
 	//a := 10
 	//println("\"$a")
-}	
+}
+
+fn test_atoi() {
+	assert '234232'.int() == 234232
+	assert '-9009'.int() == -9009
+	assert '0'.int() == 0
+	for n in -10000 .. 100000 {
+		s := n.str()
+		assert s.int() == n
+	}
+}
+
+fn test_raw_inter() {
+	world := 'world'
+	println(world)
+	s := r'hello\n$world'
+	assert s == r'hello\n$world'
+	assert s.contains('$')
+}
+
+fn test_c_r() {
+	// This used to break because of r'' and c''
+	c := 42
+	println('$c')
+	r := 50
+	println('$r')
+}
+
+fn test_inter_before_comp_if() {
+	s := '123'
+	// This used to break ('123 $....')
+	$if linux {
+		println(s)
+	}
+}
+
+fn test_double_quote_inter() {
+	a := 1
+	b := 2
+	println("${a} ${b}")
+	assert "${a} ${b}" == "1 2"
+	assert '${a} ${b}' == "1 2"
+}
 

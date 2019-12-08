@@ -11,45 +11,21 @@ fn (p mut Parser) gen_or_else(pos int) string {
 }
 */
 
+
 // returns the type of the new variable
 fn (p mut Parser) gen_var_decl(name string, is_static bool) string {
 	// Generate expression to tmp because we need its type first
 	// `[typ] [name] = bool_expression();`
 	pos := p.cgen.add_placeholder()
+	p.is_var_decl = true
 	mut typ := p.bool_expression()
-	if typ.starts_with('...') { typ = typ.right(3) }
+	p.is_var_decl = false
+	if typ.starts_with('...') { typ = typ[3..] }
 	//p.gen('/*after expr*/')
 	// Option check ? or {
 	or_else := p.tok == .key_orelse
-	tmp := p.get_tmp()
 	if or_else {
-		// Option_User tmp = get_user(1);
-		// if (!tmp.ok) { or_statement }
-		// User user = *(User*)tmp.data;
-		// p.assigned_var = ''
-		p.cgen.set_placeholder(pos, '$typ $tmp = ')
-		p.genln(';')
-		if !typ.starts_with('Option_') {
-			p.error('`or` block cannot be applied to non-optional type')
-		}
-		typ = typ.replace('Option_', '')
-		p.next()
-		p.check(.lcbr)
-		p.genln('if (!$tmp .ok) {')
-		p.register_var(Var {
-			name: 'err'
-			typ: 'string'
-			is_mut: false
-			is_used: true
-		})
-		p.genln('string err = $tmp . error;')
-		p.statements()
-		p.genln('$typ $name = *($typ*) $tmp . data;')
-		if !p.returns && p.prev_tok2 != .key_continue && p.prev_tok2 != .key_break {
-			p.error('`or` block must return/exit/continue/break/panic')
-		}
-		p.returns = false
-		return typ
+		return p.gen_handle_option_or_else(typ, name, pos)
 	}
 	gen_name := p.table.var_cgen_name(name)
 	mut nt_gen := p.table.cgen_name_type_pair(gen_name, typ)
@@ -59,7 +35,7 @@ fn (p mut Parser) gen_var_decl(name string, is_static bool) string {
 	} else if typ.starts_with('[') && typ[ typ.len-1 ] != `*` {
 		// a fixed_array initializer, like `v := [1.1, 2.2]!!`
 		// ... should translate to the following in C `f32 v[2] = {1.1, 2.2};`
-		initializer := p.cgen.cur_line.right(pos)
+		initializer := p.cgen.cur_line[pos..]
 		if initializer.len > 0 {
 			p.cgen.resetln(' = {' + initializer.all_after('{') )
 		} else if initializer.len == 0 {
@@ -93,40 +69,20 @@ fn (p mut Parser) gen_blank_identifier_assign() {
 	p.check_name()
 	p.check_space(.assign)
 	is_indexer := p.peek() == .lsbr
-	mut expr := p.lit
-	mut is_fn_call := p.peek() == .lpar 
-	if !is_fn_call {
-		mut i := p.token_idx+1
-		for (p.tokens[i].tok == .dot || p.tokens[i].tok == .name) &&
-			p.tokens[i].lit != '_' {
-			expr += if p.tokens[i].tok == .dot { '.' } else { p.tokens[i].lit }
-			i++
-		}
-		is_fn_call = p.tokens[i].tok == .lpar
-	}
+	is_fn_call, next_expr := p.is_expr_fn_call(p.token_idx)
 	pos := p.cgen.add_placeholder()
-	mut typ := p.bool_expression()
-	if !is_indexer && !is_fn_call {
-		p.error_with_token_index('assigning `$expr` to `_` is redundant', assign_error_tok_idx)
+	p.is_var_decl = true
+	typ := p.bool_expression()
+	if typ == 'void' {
+		p.error_with_token_index('$next_expr() $err_used_as_value', p.token_idx-2)
 	}
-	tmp := p.get_tmp()
+	p.is_var_decl = false
+	if !is_indexer && !is_fn_call {
+		p.error_with_token_index('assigning `$next_expr` to `_` is redundant', assign_error_tok_idx)
+	}
 	// handle or
 	if p.tok == .key_orelse {
-		p.cgen.set_placeholder(pos, '$typ $tmp = ')
-		p.genln(';')
-		typ = typ.replace('Option_', '')
-		p.next()
-		p.check(.lcbr)
-		p.genln('if (!$tmp .ok) {')
-		p.register_var(Var {
-			name: 'err'
-			typ: 'string'
-			is_mut: false
-			is_used: true
-		})
-		p.genln('string err = $tmp . error;')
-		p.statements()
-		p.returns = false
+		p.gen_handle_option_or_else(typ, '', pos)
 	} else {
 		if is_fn_call {
 			p.gen(';')
@@ -136,21 +92,93 @@ fn (p mut Parser) gen_blank_identifier_assign() {
 	}
 }
 
+fn (p mut Parser) gen_handle_option_or_else(_typ, name string, fn_call_ph int) string {
+	mut typ := _typ
+	if !typ.starts_with('Option_') {
+		p.error('`or` block cannot be applied to non-optional type')
+	}
+	is_assign := name.len > 0
+	tmp := p.get_tmp()
+	p.cgen.set_placeholder(fn_call_ph, '$typ $tmp = ')
+	typ = typ[7..]
+	p.genln(';')
+	or_tok_idx := p.token_idx
+	p.check(.key_orelse)
+	p.check(.lcbr)
+	p.register_var(Var {
+		name: 'err'
+		typ: 'string'
+		is_mut: false
+		is_used: true
+	})
+	p.register_var(Var {
+		name: 'errcode'
+		typ: 'int'
+		is_mut: false
+		is_used: true
+	})
+	if is_assign && !name.contains('.') { // don't initialize struct fields
+		p.genln('$typ $name;')
+	}
+	p.genln('if (!$tmp .ok) {')
+	p.genln('string err = $tmp . error;')
+	p.genln('int errcode = $tmp . ecode;')
+	last_ph := p.cgen.add_placeholder()
+	last_typ := p.statements()
+	if is_assign && last_typ == typ {
+		expr_line := p.cgen.lines[p.cgen.lines.len-2]
+		last_expr := expr_line[last_ph..]
+		p.cgen.lines[p.cgen.lines.len-2]  = ''
+		p.genln('if ($tmp .ok) {')
+		p.genln('$name = *($typ*) $tmp . data;')
+		p.genln('} else {')
+		p.genln('$name = $last_expr')
+		p.genln('}')
+	} else if is_assign {
+		p.genln('$name = *($typ*)${tmp}.data;')
+	}
+	if !p.returns && last_typ != typ && is_assign && p.prev_tok2 != .key_continue && p.prev_tok2 != .key_break {
+		p.error_with_token_index('`or` block must provide a default value or return/exit/continue/break/panic', or_tok_idx)
+	}
+	p.returns = false
+	return typ
+}
+
+// `files := os.ls('.')?`
+fn (p mut Parser) gen_handle_question_suffix(f Fn, ph int) string {
+	if p.cur_fn.name != 'main__main' {
+		p.error('`func()?` syntax can only be used inside `fn main()` for now')
+	}
+	p.check(.question)
+	tmp := p.get_tmp()
+	p.cgen.set_placeholder(ph, '$f.typ $tmp = ')
+	p.genln(';')
+	p.genln('if (!${tmp}.ok) v_panic(${tmp}.error);')
+	typ := f.typ[7..] // option_xxx
+	p.gen('*($typ*) ${tmp}.data;')
+	return typ
+}
+
 fn types_to_c(types []Type, table &Table) string {
 	mut sb := strings.new_builder(10)
 	for t in types {
-		if t.cat != .union_ && t.cat != .struct_ && t.cat != .objc_interface {
+		//if t.cat != .union_ && t.cat != .struct_ && t.cat != .objc_interface {
+		if !(t.cat in [.union_, .struct_, .objc_interface, .interface_]) {
 			continue
 		}
 		//if is_atomic {
 			//sb.write('_Atomic ')
 		//}
-		if t.cat ==  .objc_interface {
+		if t.cat == .objc_interface {
 			sb.writeln('@interface $t.name : $t.parent { @public')
 		}
 		else {
 			kind := if t.cat == .union_ {'union'} else {'struct'}
 			sb.writeln('$kind $t.name {')
+			if t.cat == .interface_ {
+				sb.writeln('\tvoid* _object;')
+				sb.writeln('\tint _interface_idx; // int t')
+			}
 		}
 		for field in t.fields {
 			sb.write('\t')
@@ -165,17 +193,17 @@ fn types_to_c(types []Type, table &Table) string {
 	return sb.str()
 }
 
-fn (p mut Parser) index_get(typ string, fn_ph int, cfg IndexCfg) {
+fn (p mut Parser) index_get(typ string, fn_ph int, cfg IndexConfig) {
 	// Erase var name we generated earlier:	"int a = m, 0"
 	// "m, 0" gets killed since we need to start from scratch. It's messy.
 	// "m, 0" is an index expression, save it before deleting and insert later in map_get()
 	mut index_expr := ''
 	if p.cgen.is_tmp {
-		index_expr = p.cgen.tmp_line.right(fn_ph)
-		p.cgen.resetln(p.cgen.tmp_line.left(fn_ph))
+		index_expr = p.cgen.tmp_line[fn_ph..]
+		p.cgen.resetln(p.cgen.tmp_line[..fn_ph])
 	} else {
-		index_expr = p.cgen.cur_line.right(fn_ph)
-		p.cgen.resetln(p.cgen.cur_line.left(fn_ph))
+		index_expr = p.cgen.cur_line[fn_ph..]
+		p.cgen.resetln(p.cgen.cur_line[..fn_ph])
 	}
 	// Can't pass integer literal, because map_get() requires a void*
 	tmp := p.get_tmp()
@@ -191,15 +219,24 @@ fn (p mut Parser) index_get(typ string, fn_ph int, cfg IndexCfg) {
 			p.gen('$index_expr ]')
 		}
 		else {
-			if cfg.is_ptr {
-				p.gen('( *($typ*) array_get(* $index_expr) )')
-			}  else {
-				p.gen('( *($typ*) array_get($index_expr) )')
+			ref := if cfg.is_ptr { '*' } else { '' }
+			if cfg.is_slice {
+				p.gen(' array_slice2($ref $index_expr) ')
+			}
+			else {
+				p.gen('( *($typ*) array_get($ref $index_expr) )')
 			}
 		}
 	}
 	else if cfg.is_str && !p.builtin_mod {
-		p.gen('string_at($index_expr)')
+		if  p.pref.is_bare {
+			p.gen(index_expr)
+		}
+		else if cfg.is_slice {
+			p.gen('string_substr2($index_expr)')
+		} else {
+			p.gen('string_at($index_expr)')
+		}
 	}
 	// Zero the string after map_get() if it's nil, numbers are automatically 0
 	// This is ugly, but what can I do without generics?
@@ -216,14 +253,26 @@ fn (table mut Table) fn_gen_name(f &Fn) string {
 	if f.is_method {
 		name = '${f.receiver_typ}_$f.name'
 		name = name.replace(' ', '')
-		name = name.replace('*', '')
-		name = name.replace('+', 'plus')
-		name = name.replace('-', 'minus')
+		if f.name.len == 1 {
+			match f.name[0] {
+				`+` { name = name.replace('+', 'op_plus') }
+				`-` { name = name.replace('-', 'op_minus') }
+				`*` { name = name.replace('*', 'op_mul') }
+				`/` { name = name.replace('/', 'op_div') }
+				`%` { name = name.replace('%', 'op_mod') }
+				else {}
+			}
+		}
+	}
+	if f.is_interface {
+	//       iname := f.args[0].typ // Speaker
+		//         	var := p.expr_var.name
+		return ''
 	}
 	// Avoid name conflicts (with things like abs(), print() etc).
 	// Generate v_abs(), v_print()
 	// TODO duplicate functionality
-	if f.mod == 'builtin' && f.name in CReserved {
+	if f.mod == 'builtin' && f.name in c_reserved {
 		return 'v_$name'
 	}
 	// Obfuscate but skip certain names
@@ -257,9 +306,11 @@ fn (table mut Table) fn_gen_name(f &Fn) string {
 	return name
 }
 
-fn (p mut Parser) gen_method_call(receiver_type, ftyp string, cgen_name string, receiver Var,method_ph int) {
+fn (p mut Parser) gen_method_call(receiver &Var, receiver_type string,
+	cgen_name string, ftyp string, method_ph int)
+{
 	//mut cgen_name := p.table.fn_gen_name(f)
-	mut method_call := cgen_name + '('
+	mut method_call := cgen_name + ' ('
 	// if receiver is key_mut or a ref (&), generate & for the first arg
 	if receiver.ref || (receiver.is_mut && !receiver_type.contains('*')) {
 		method_call += '& /* ? */'
@@ -276,12 +327,11 @@ fn (p mut Parser) gen_method_call(receiver_type, ftyp string, cgen_name string, 
 			// array_int => int
 			cast = receiver_type.all_after('array_')
 			cast = '*($cast*) '
-		}else{
+		} else {
 			cast = '(voidptr) '
 		}
 	}
 	p.cgen.set_placeholder(method_ph, '$cast $method_call')
-	//return method_call
 }
 
 fn (p mut Parser) gen_array_at(typ_ string, is_arr0 bool, fn_ph int) {
@@ -290,9 +340,9 @@ fn (p mut Parser) gen_array_at(typ_ string, is_arr0 bool, fn_ph int) {
 	// array_int a; a[0]
 	// type is "array_int", need "int"
 	// typ = typ.replace('array_', '')
-	if is_arr0 {
-		typ = typ.right(6)
-	}
+	// if is_arr0 {
+	// 	typ = typ.right(6)
+	// }
 	// array a; a.first() voidptr
 	// type is "array", need "void*"
 	if typ == 'array' {
@@ -316,11 +366,19 @@ fn (p mut Parser) gen_for_header(i, tmp, var_typ, val string) {
 	p.genln('$var_typ $val = (($var_typ *) $tmp . data)[$i];')
 }
 
+fn (p mut Parser) gen_for_fixed_header(i, tmp, var_typ, val string) {
+	p.genln('for (int $i = 0; $i < sizeof(${tmp}) / sizeof($tmp [0]); $i++) {')
+	if val == '_' { return }
+	p.genln('$var_typ $val = $tmp[$i];')
+}
+
 fn (p mut Parser) gen_for_str_header(i, tmp, var_typ, val string) {
-	p.genln('array_byte bytes_$tmp = string_bytes( $tmp );')
+	// TODO var_typ is always byte
+	//p.genln('array_byte bytes_$tmp = string_bytes( $tmp );')
 	p.genln(';\nfor (int $i = 0; $i < $tmp .len; $i ++) {')
 	if val == '_' { return }
-	p.genln('$var_typ $val = (($var_typ *) bytes_$tmp . data)[$i];')
+	//p.genln('$var_typ $val = (($var_typ *) bytes_$tmp . data)[$i];')
+	p.genln('$var_typ $val = ${tmp}.str[$i];')
 }
 
 fn (p mut Parser) gen_for_range_header(i, range_end, tmp, var_type, val string) {
@@ -366,12 +424,16 @@ fn (p mut Parser) gen_array_init(typ string, no_alloc bool, new_arr_ph int, nr_e
 fn (p mut Parser) gen_array_set(typ string, is_ptr, is_map bool,fn_ph, assign_pos int, is_cao bool) {
 	// `a[0] = 7`
 	// curline right now: `a , 0  =  7`
-	mut val := p.cgen.cur_line.right(assign_pos)
-	p.cgen.resetln(p.cgen.cur_line.left(assign_pos))
+	mut val := p.cgen.cur_line[assign_pos..]
+	p.cgen.resetln(p.cgen.cur_line[..assign_pos])
 	mut cao_tmp := p.cgen.cur_line
 	mut func := ''
 	if is_map {
-		func = 'map_set(&'
+		if is_ptr {
+			func = 'map_set('
+		} else {
+			func = 'map_set(&'
+		}
 		// CAO on map is a bit more complicated as it loads
 		// the value inside a pointer instead of returning it.
 	}
@@ -430,15 +492,17 @@ fn (p mut Parser) gen_struct_init(typ string, t Type) bool {
 		}
 	}
 	else {
-		// TODO tmp hack for 0 pointers init
-		// &User{!} ==> 0
 		if p.tok == .not {
+			// old &User{!} ==> 0 hack
+			p.error('use `$t.name(0)` instead of `&$t.name{!}`')
+			/*
 			p.next()
 			p.gen('0')
 			p.check(.rcbr)
 			return true
+			*/
 		}
-		p.gen('($t.name*)memdup(&($t.name)  {')
+		p.gen('($t.name*)memdup(&($t.name) {')
 	}
 	return false
 }
@@ -452,6 +516,8 @@ fn (p mut Parser) gen_empty_map(typ string) {
 }
 
 fn (p mut Parser) cast(typ string) {
+	p.gen('(')
+	defer { p.gen(')') }
 	p.next()
 	pos := p.cgen.add_placeholder()
 	if p.tok == .rpar {
@@ -462,6 +528,10 @@ fn (p mut Parser) cast(typ string) {
 	p.check(.lpar)
 	p.expected_type = typ
 	expr_typ := p.bool_expression()
+	// Do not allow `int(my_int)`
+	if expr_typ == typ {
+		p.warn('casting `$typ` to `$expr_typ` is not needed')
+	}
 	// `face := FT_Face(cobj)` => `FT_Face face = *((FT_Face*)cobj);`
 	casting_voidptr_to_value :=  expr_typ == 'void*' && typ != 'int' &&
 		typ != 'byteptr' &&		!typ.ends_with('*')
@@ -500,9 +570,24 @@ fn (p mut Parser) cast(typ string) {
 		p.error('cannot cast `$expr_typ` to `$typ`, use backquotes `` to create a `$typ` or access the value of an index of `$expr_typ` using []')
 	}
 	else if casting_voidptr_to_value {
-		p.cgen.set_placeholder(pos, '*($typ*)(')
+		p.cgen.set_placeholder(pos, '($typ)(')
 	}
 	else {
+		// Nothing can be cast to bool
+		if typ == 'bool' {
+			if is_number_type(expr_typ) || is_float_type(expr_typ) {
+				p.error('cannot cast a number to `bool`')
+			}
+			p.error('cannot cast `$expr_typ` to `bool`')
+		}
+		// Strings can't be cast
+		if expr_typ == 'string' {
+			p.error('cannot cast `$expr_typ` to `$typ`')
+		}
+		// Nothing can be cast to bool
+		if expr_typ == 'bool' {
+			p.error('cannot cast `bool` to `$typ`')
+		}
 		p.cgen.set_placeholder(pos, '($typ)(')
 	}
 	p.check(.rpar)
@@ -511,7 +596,7 @@ fn (p mut Parser) cast(typ string) {
 
 fn type_default(typ string) string {
 	if typ.starts_with('array_') {
-		return 'new_array(0, 1, sizeof( ${typ.right(6)} ))'
+		return 'new_array(0, 1, sizeof( ${typ[6..]} ))'
 	}
 	// Always set pointers to 0
 	if typ.ends_with('*') {
@@ -522,24 +607,50 @@ fn type_default(typ string) string {
 		return '{0}'
 	}
 	// Default values for other types are not needed because of mandatory initialization
-	switch typ {
-	case 'bool': return '0'
-	case 'string': return 'tos((byte *)"", 0)'
-	case 'i8': return '0'
-	case 'i16': return '0'
-	case 'i64': return '0'
-	case 'u16': return '0'
-	case 'u32': return '0'
-	case 'u64': return '0'
-	case 'byte': return '0'
-	case 'int': return '0'
-	case 'rune': return '0'
-	case 'f32': return '0.0'
-	case 'f64': return '0.0'
-	case 'byteptr': return '0'
-	case 'voidptr': return '0'
+	 match typ {
+ 'bool'{ return '0'}
+ 'string'{ return 'tos3("")'}
+ 'i8'{ return '0'}
+ 'i16'{ return '0'}
+ 'i64'{ return '0'}
+ 'u16'{ return '0'}
+ 'u32'{ return '0'}
+ 'u64'{ return '0'}
+ 'byte'{ return '0'}
+ 'int'{ return '0'}
+ 'rune'{ return '0'}
+ 'f32'{ return '0.0'}
+ 'f64'{ return '0.0'}
+ 'byteptr'{ return '0'}
+ 'voidptr'{ return '0'}
+else {}
+ }
+ return '{0}'
+
+
+	// TODO this results in
+	// error: expected a field designator, such as '.field = 4'
+	//- Empty ee= (Empty) { . =  {0}  } ;
+	/*
+	return match typ {
+		'bool'{ '0'}
+		'string'{ 'tos3("")'}
+		'i8'{ '0'}
+		'i16'{ '0'}
+		'i64'{ '0'}
+		'u16'{ '0'}
+		'u32'{ '0'}
+		'u64'{ '0'}
+		'byte'{ '0'}
+		'int'{ '0'}
+		'rune'{ '0'}
+		'f32'{ '0.0'}
+		'f64'{ '0.0'}
+		'byteptr'{ '0'}
+		'voidptr'{ '0'}
+		else { '{0} '}
 	}
-	return '{0}'
+	*/
 }
 
 fn (p mut Parser) gen_array_push(ph int, typ, expr_type, tmp, elm_type string) {
@@ -556,7 +667,7 @@ fn (p mut Parser) gen_array_push(ph int, typ, expr_type, tmp, elm_type string) {
 		push_call := if typ.contains('*'){'_PUSH('} else { '_PUSH(&'}
 		p.cgen.set_placeholder(ph, push_call)
 		if elm_type.ends_with('*') {
-			p.gen('), $tmp, ${elm_type.left(elm_type.len - 1)})')
+			p.gen('), $tmp, ${elm_type[..elm_type.len - 1]})')
 		} else {
 			p.gen('), $tmp, $elm_type)')
 		}

@@ -13,7 +13,7 @@ Bit arrays are stored in data structures called 'BitField'. The structure is
 provides API (functions and methods) for accessing and modifying bit arrays.
 */
 
-struct BitField {
+pub struct BitField {
 mut:
 	size int
 	//field *u32
@@ -34,7 +34,7 @@ fn bitslot(size int) int {
 }
 
 fn bitget(instance BitField, bitnr int) int {
-	return (instance.field[bitslot(bitnr)] >> u32(bitnr % SLOT_SIZE)) & 1
+	return (instance.field[bitslot(bitnr)] >> (bitnr % SLOT_SIZE)) & u32(1)
 }
 
 fn bitset(instance mut BitField, bitnr int) {
@@ -77,10 +77,19 @@ fn cleartail(instance mut BitField) {
 
 // public functions
 
-// str2bf() converts a string of characters ('0' and '1') to a bit
+// from_bytes() converts a byte array into a bitfield.
+pub fn from_bytes(input []byte) BitField {
+	mut output := new(input.len * 8)
+	for i, b in input {
+		output.field[i / 4] |= u32(b) << ((i % 4) * 8)
+	}
+	return output
+}
+
+// from_string() converts a string of characters ('0' and '1') to a bit
 // array. Any character different from '0' is treated as '1'.
 
-pub fn str2bf(input string) BitField {
+pub fn from_string(input string) BitField {
 	mut output := new(input.len)
 	for i := 0; i < input.len; i++ {
 		if input[i] != 48 {
@@ -451,7 +460,7 @@ pub fn (input BitField) slice(_start int, _end int) BitField {
 // reverse() reverses the order of bits in the array (swap the first with the
 // last, the second with the last but one and so on)
 
-pub fn (instance mut BitField) reverse() BitField {
+pub fn (instance BitField) reverse() BitField {
 	size := instance.size
 	bitnslots := bitnslots(size)
 	mut output := new(size)

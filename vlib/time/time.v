@@ -7,12 +7,44 @@ module time
 import rand
 
 const (
-	month_days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        days_string        = 'MonTueWedThuFriSatSun'
+
+        month_days         = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        months_string      = 'JanFebMarAprMayJunJulAugSepOctNovDec'
+
+        // The unsigned zero year for internal calculations.
+        // Must be 1 mod 400, and times before it will not compute correctly,
+        // but otherwise can be changed at will.
+        absolute_zero_year = i64(-292277022399)
+
+        seconds_per_minute = 60
+        seconds_per_hour   = 60 * seconds_per_minute
+        seconds_per_day    = 24 * seconds_per_hour
+        seconds_per_week   = 7 * seconds_per_day
+        days_per_400_years = 365*400 + 97
+        days_per_100_years = 365*100 + 24
+        days_per_4_years   = 365*4 + 1
+
+        days_before        = [
+                0,
+                31,
+                31 + 28,
+                31 + 28 + 31,
+                31 + 28 + 31 + 30,
+                31 + 28 + 31 + 30 + 31,
+                31 + 28 + 31 + 30 + 31 + 30,
+                31 + 28 + 31 + 30 + 31 + 30 + 31,
+                31 + 28 + 31 + 30 + 31 + 30 + 31 + 31,
+                31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30,
+                31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31,
+                31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30,
+                31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31,
+        ]
 )
 
 #include <time.h>
 
-struct Time {
+pub struct Time {
 pub:
 	year   int
 	month  int
@@ -23,13 +55,39 @@ pub:
 	uni    int // TODO it's safe to use "unix" now
 }
 
+pub enum FormatTime {
+        hhmm12
+        hhmm24
+        hhmmss12
+        hhmmss24
+        no_time
+}
+
+pub enum FormatDate {
+        ddmmyy
+        ddmmyyyy
+        mmddyy
+        mmddyyyy
+        mmmd
+        mmmdd
+        mmmddyyyy
+        no_date
+        yyyymmdd
+}
+
+pub enum FormatDelimiter {
+        dot
+        hyphen
+        slash
+        space
+}
 
 fn C.localtime(int) &C.tm
 
 fn remove_me_when_c_bug_is_fixed() { // TODO
 }
 
-struct C.time_t {}
+pub struct C.time_t {}
 
 struct C.tm {
 	tm_year int
@@ -44,7 +102,7 @@ fn C.time(int) C.time_t
 
 pub fn now() Time {
 	t := C.time(0)
-	mut now := &C.tm{!}
+	mut now := &C.tm(0)
 	now = C.localtime(&t)
 	return convert_ctime(now)
 }
@@ -52,46 +110,8 @@ pub fn now() Time {
 pub fn random() Time {
 	now_unix := now().uni
 	rand_unix := rand.next(now_unix)
-
 	return time.unix(rand_unix)
 }
-
-const (
-// The unsigned zero year for internal calculations.
-	// Must be 1 mod 400, and times before it will not compute correctly,
-	// but otherwise can be changed at will.
-	absolute_zero_year = i64(-292277022399)
-
-	seconds_per_minute = 60
-	seconds_per_hour   = 60 * seconds_per_minute
-	seconds_per_day    = 24 * seconds_per_hour
-	seconds_per_week   = 7 * seconds_per_day
-	days_per_400_years  = 365*400 + 97
-	days_per_100_years  = 365*100 + 24
-	days_per_4_years    = 365*4 + 1
-
- days_before = [
-	0,
-	31,
-	31 + 28,
-	31 + 28 + 31,
-	31 + 28 + 31 + 30,
-	31 + 28 + 31 + 30 + 31,
-	31 + 28 + 31 + 30 + 31 + 30,
-	31 + 28 + 31 + 30 + 31 + 30 + 31,
-	31 + 28 + 31 + 30 + 31 + 30 + 31 + 31,
-	31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30,
-	31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31,
-	31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30,
-	31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31,
-]
-
-)
-
-const (
-	months_string = 'JanFebMarAprMayJunJulAugSepOctNovDec'
-	days_string = 'MonTueWedThuFriSatSun'
-)
 
 
 // Based on Go's time package.
@@ -130,14 +150,14 @@ pub fn unix(abs int) Time {
 	y += n
 	d -= 365 * n
 
-	yday := int(d)
+	yday := d
 	mut day := yday
 
 	year := abs / int(3.154e+7) + 1970 //int(i64(y) + absolute_zero_year)
-	hour := int(abs%seconds_per_day) / seconds_per_hour
-	minute := int(abs % seconds_per_hour) / seconds_per_minute
-	second := int(abs % seconds_per_minute)
-	
+	hour := (abs%seconds_per_day) / seconds_per_hour
+	minute := (abs % seconds_per_hour) / seconds_per_minute
+	second := (abs % seconds_per_minute)
+
 	if is_leap_year(year) {
 		// Leap year
 		if day > 31+29-1 {
@@ -154,17 +174,25 @@ pub fn unix(abs int) Time {
 	// The estimate may be too low by at most one month, so adjust.
 	mut month := day / 31
 	mut begin := 0
-	end := int(days_before[month+1])
+	end := (days_before[month+1])
 	if day >= end {
 		month++
 		begin = end
 	} else {
-		begin = int(days_before[month])
+		begin = (days_before[month])
 	}
 
 	month++ // because January is 1
 	day = day - begin + 1
-	return Time{year:year, month: month, day:day, hour:hour, minute: minute, second: second}
+	return Time{
+		year:year
+		month: month
+		day:day
+		hour:hour
+		minute: minute
+		second: second
+		uni: abs
+	}
 }
 
 pub fn convert_ctime(t tm) Time {
@@ -179,23 +207,34 @@ pub fn convert_ctime(t tm) Time {
 	}
 }
 
+// format_ss  returns a string for t in a given format YYYY-MM-DD HH:MM:SS in
+//            24h notation
+// @param
+// @return    string
+// @example   1980-07-11 21:23:42
 pub fn (t Time) format_ss() string {
-	return '${t.year}-${t.month:02d}-${t.day:02d} ${t.hour:02d}:${t.minute:02d}:${t.second:02d}'
+        return t.get_fmt_str(.hyphen, .hhmmss24, .yyyymmdd)
 }
 
+// format_ss  returns a string for t in a given format YYYY-MM-DD HH:MM in 24h
+//            notation
+// @param
+// @return    string
+// @example   1980-07-11 21:23
 pub fn (t Time) format() string {
-	return '${t.year}-${t.month:02d}-${t.day:02d} ${t.hour:02d}:${t.minute:02d}'
+        return t.get_fmt_str(.hyphen, .hhmm24, .yyyymmdd)
 }
 
 
 pub fn (t Time) smonth() string {
 	i := t.month - 1
-	return months_string.substr(i * 3, (i + 1) * 3)
+	return months_string[i * 3..(i + 1) * 3]
 }
 
-// 21:04
+// hhmm     returns a string for t in the given format HH:MM in 24h notation
+// @example 21:04
 pub fn (t Time) hhmm() string {
-	return '${t.hour:02d}:${t.minute:02d}'
+        return t.get_fmt_time_str(.hhmm24)
 }
 
 /*
@@ -204,42 +243,29 @@ fn (t Time) hhmm_tmp() string {
 }
 */
 
-// 9:04pm
+// hhmm12   returns a string for t in the given format HH:MM in 12h notation
 pub fn (t Time) hhmm12() string {
-	mut am := 'am'
-	mut hour := t.hour
-	if t.hour > 11 {
-		am = 'pm'
-	}
-	if t.hour > 12 {
-		hour = hour - 12
-	}
-	if t.hour == 0 {
-		hour = 12
-	}
-	return '$hour:${t.minute:02d} $am'
+        return t.get_fmt_time_str(.hhmm12)
 }
 
-// 21:04:03
+// hhmmss   returns a string for t in the given format HH:MM:SS in 24h notation
 pub fn (t Time) hhmmss() string {
-	return '${t.hour:02d}:${t.minute:02d}:${t.second:02d}'
+        return t.get_fmt_time_str(.hhmmss24)
 }
 
-// 2012-01-05
+// ymmdd    returns a string for t in the given format YYYY-MM-DD
 pub fn (t Time) ymmdd() string {
-	return '${t.year}-${t.month:02d}-${t.day:02d}'
+        return t.get_fmt_date_str(.hyphen, .yyyymmdd)
 }
 
-// 05.02.2012
+// ddmmy    returns a string for t in the given format DD.MM.YYYY
 pub fn (t Time) ddmmy() string {
-	return '${t.day:02d}.${t.month:02d}.${t.year}'
+        return t.get_fmt_date_str(.dot, .ddmmyyyy)
 }
 
-// Jul 3
+// md       returns a string for t in the given format MMM D
 pub fn (t Time) md() string {
-	// jl := t.smonth()
-	s := '${t.smonth()} $t.day'
-	return s
+        return t.get_fmt_date_str(.space, .mmmd)
 }
 
 pub fn (t Time) clean() string {
@@ -249,7 +275,7 @@ pub fn (t Time) clean() string {
 	// }
 	// Today
 	if t.month == nowe.month && t.year == nowe.year && t.day == nowe.day {
-		return t.hhmm()
+                return t.get_fmt_time_str(.hhmm24)
 	}
 	// This week
 	// if time.Since(t) < 24*7*time.Hour {
@@ -257,7 +283,7 @@ pub fn (t Time) clean() string {
 	// }
 	// This year
 	if t.year == nowe.year {
-		return '${t.smonth()} ${t.day} ${t.hhmm()}'
+                return t.get_fmt_str(.space, .hhmm24, .mmmd)
 	}
 	return t.format()
 	// return fmt.Sprintf("%4d/%02d/%02d", t.Year(), t.Month(), t.Day()) + " " + hm
@@ -270,7 +296,7 @@ pub fn (t Time) clean12() string {
 	// }
 	// Today
 	if t.month == nowe.month && t.year == nowe.year && t.day == nowe.day {
-		return t.hhmm12()
+                return t.get_fmt_time_str(.hhmm12)
 	}
 	// This week
 	// if time.Since(t) < 24*7*time.Hour {
@@ -278,7 +304,7 @@ pub fn (t Time) clean12() string {
 	// }
 	// This year
 	if t.year == nowe.year {
-		return '${t.smonth()} ${t.day} ${t.hhmm12()}'
+                return t.get_fmt_str(.space, .hhmm12, .mmmd)
 	}
 	return t.format()
 	// return fmt.Sprintf("%4d/%02d/%02d", t.Year(), t.Month(), t.Day()) + " " + hm
@@ -287,18 +313,17 @@ pub fn (t Time) clean12() string {
 // `parse` parses time in the following format: "2018-01-27 12:48:34"
 pub fn parse(s string) Time {
 	// println('parse="$s"')
-	pos := s.index(' ')
-	if pos <= 0 {
+	pos := s.index(' ') or {
 		println('bad time format')
 		return now()
 	}
-	symd := s.left(pos)
+	symd := s[..pos]
 	ymd := symd.split('-')
 	if ymd.len != 3 {
 		println('bad time format')
 		return now()
 	}
-	shms := s.right(pos)
+	shms := s[pos..]
 	hms := shms.split(':')
 	hour := hms[0]
 	minute := hms[1]
@@ -336,6 +361,10 @@ pub fn (t &Time) calc_unix() int {
 // TODO add(d time.Duration)
 pub fn (t Time) add_seconds(seconds int) Time {
 	return unix(t.uni + seconds)
+}
+
+pub fn (t Time) add_days(days int) Time {
+	return unix(t.uni + days * 3600 * 24)
 }
 
 // TODO use time.Duration instead of seconds
@@ -387,12 +416,12 @@ pub fn (t Time) day_of_week() int {
 // weekday_str() returns the current day in string (upto 3 characters)
 pub fn (t Time) weekday_str() string {
 	i := t.day_of_week() - 1
-	return days_string.substr(i * 3, (i + 1) * 3)
+	return days_string[i * 3..(i + 1) * 3]
 }
 
-struct C.timeval  {
-	tv_sec int
-	tv_usec int
+pub struct C.timeval  {
+	tv_sec u64
+	tv_usec u64
 }
 
 // in ms
@@ -403,7 +432,7 @@ pub fn ticks() i64 {
 	$else {
 		ts := C.timeval{}
 		C.gettimeofday(&ts,0)
-		return ts.tv_sec * 1000 + (ts.tv_usec / 1000)
+		return i64(ts.tv_sec * u64(1000) + (ts.tv_usec / u64(1000)))
 	}
 
 /*
@@ -415,7 +444,7 @@ pub fn ticks() i64 {
 
 pub fn sleep(seconds int) {
 	$if windows {
-		C._sleep(seconds * 1000)
+		C.Sleep(seconds * 1000)
 	}
 	$else {
 		C.sleep(seconds)
@@ -453,4 +482,91 @@ pub fn days_in_month(month, year int) ?int {
 	extra :=	if month == 2 && is_leap_year(year) {1} else {0}
 	res := month_days[month-1] + extra
 	return res
+}
+
+// get_fmt_time_str   returns a string for time t in a given format
+// @param             FormatTime
+// @return            string
+// @example           21:23:42
+pub fn (t Time) get_fmt_time_str(fmt_time FormatTime) string {
+        if fmt_time == .no_time {
+                return ''
+        }
+
+        tp := if t.hour > 11 {
+                'p.m.'
+              } else {
+                'a.m.'
+              }
+
+        hour := if t.hour > 12 {
+                        t.hour - 12
+                } else  if t.hour == 0 {
+                              12
+                        } else {
+                              t.hour
+                        }
+
+        return  match fmt_time {
+                        .hhmm12     { '$hour:${t.minute:02d} $tp' }
+                        .hhmm24     { '${t.hour:02d}:${t.minute:02d}' }
+                        .hhmmss12   { '$hour:${t.minute:02d}:${t.second:02d} $tp' }
+                        .hhmmss24   { '${t.hour:02d}:${t.minute:02d}:${t.second:02d}' }
+                        else        { 'unknown enumeration $fmt_time' }
+                }
+}
+
+// get_fmt_date_str   returns a string for t in a given date format
+// @param             FormatDelimiter, FormatDate
+// @return            string
+// @example           11.07.1980
+pub fn (t Time) get_fmt_date_str(fmt_dlmtr FormatDelimiter, fmt_date FormatDate) string {
+        if fmt_date == .no_date {
+                return ''
+        }
+
+        month := '${t.smonth()}'
+        year := t.year.str()[2..]
+
+        return  match fmt_date {
+                        .ddmmyy     { '${t.day:02d}|${t.month:02d}|$year' }
+                        .ddmmyyyy   { '${t.day:02d}|${t.month:02d}|${t.year}' }
+                        .mmddyy     { '${t.month:02d}|${t.day:02d}|$year' }
+                        .mmddyyyy   { '${t.month:02d}|${t.day:02d}|${t.year}' }
+                        .mmmd       { '$month|${t.day}' }
+                        .mmmdd      { '$month|${t.day:02d}' }
+                        .mmmddyyyy  { '$month|${t.day:02d}|${t.year}' }
+                        .yyyymmdd   { '${t.year}|${t.month:02d}|${t.day:02d}' }
+                        else        { 'unknown enumeration $fmt_date' }
+                }.replace('|',  match fmt_dlmtr {
+                                        .dot    { '.' }
+                                        .hyphen { '-' }
+                                        .slash  { '/' }
+                                        .space  { ' ' }
+                                        else    { 'unknown enumeration $fmt_dlmtr' }
+                                })
+}
+
+// get_fmt_str  returns a string for t in a given format for time and date
+// @param       FormatDelimiter, FormatTime, FormatDate
+// @return      string
+// @example     11.07.1980 21:23:42
+pub fn (t Time) get_fmt_str(fmt_dlmtr FormatDelimiter, fmt_time FormatTime, fmt_date FormatDate) string {
+        if fmt_date == .no_date {
+                if fmt_time == .no_time {
+                        // saving one function call although it's checked in
+                        // t.get_fmt_time_str(fmt_time) in the beginning
+                        return ''
+                } else {
+                        return t.get_fmt_time_str(fmt_time)
+                }
+        } else {
+                if fmt_time != .no_time {
+                        return t.get_fmt_date_str(fmt_dlmtr, fmt_date)
+                               + ' '
+                               + t.get_fmt_time_str(fmt_time)
+                } else {
+                        return t.get_fmt_date_str(fmt_dlmtr, fmt_date)
+                }
+        }
 }

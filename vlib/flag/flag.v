@@ -45,7 +45,7 @@ module flag
 //  ```
 
 // data object storing information about a defined flag
-struct Flag {
+pub struct Flag {
 pub:
   name     string // name as it appears on command line
   abbr     byte   // shortcut
@@ -55,7 +55,7 @@ pub:
 }
 
 // 
-struct FlagParser {
+pub struct FlagParser {
 pub mut: 
   args  []string                  // the arguments to be parsed
   flags []Flag                    // registered flags
@@ -69,7 +69,7 @@ pub mut:
   args_description        string
 }
 
-const (
+pub const (
   // used for formating usage message
   SPACE = '                            '
   UNDERLINE = '-----------------------------------------------'
@@ -125,16 +125,15 @@ fn (fs mut FlagParser) parse_value(n string, ab byte) ?string {
   c := '--$n'
   for i, a in fs.args {
     if a == c || (a.len == 2 && a[1] == ab) {
-      if fs.args.len > i+1 && fs.args[i+1].left(2) != '--' {
-        val := fs.args[i+1]
-        fs.args.delete(i+1)
-        fs.args.delete(i)
-        return val
-      } else {
-        panic('Missing argument for \'$n\'')
-      }
-    } else if a.len > c.len && c == a.left(c.len) && a.substr(c.len, c.len+1) == '=' {
-      val := a.right(c.len+1)
+      if i+1 > fs.args.len { panic('Missing argument for \'$n\'') }
+      nextarg := fs.args[i+1]
+      if nextarg.limit(2) == '--' { panic('Missing argument for \'$n\'') }
+      val := fs.args[i+1]
+      fs.args.delete(i+1)
+      fs.args.delete(i)
+      return val
+    } else if a.len > c.len && c == a[..c.len] && a[c.len..c.len+1] == '=' {
+      val := a[c.len+1..]
       fs.args.delete(i)
       return val
     }
@@ -162,8 +161,8 @@ fn (fs mut FlagParser) parse_bool_value(n string, ab byte) ?string {
         fs.args.delete(i)
         return val
       }
-    } else if a.len > c.len && c == a.left(c.len) && a.substr(c.len, c.len+1) == '=' {
-      val := a.right(c.len+1)
+    } else if a.len > c.len && c == a[..c.len] && a[c.len..c.len+1] == '=' {
+      val := a[c.len+1..]
       fs.args.delete(i)
       return val
     }
@@ -349,7 +348,7 @@ pub fn (fs FlagParser) usage() string {
       space := if flag_desc.len > SPACE.len-2 {
         '\n$SPACE'
       } else {
-        SPACE.right(flag_desc.len)
+        SPACE[flag_desc.len..]
       }
       abbr_desc := if f.abbr == `\0` { '' } else { '  -${tos(f.abbr, 1)}\n' }
       use += '${abbr_desc}${flag_desc}${space}${f.usage}\n'
@@ -368,8 +367,8 @@ pub fn (fs FlagParser) usage() string {
 // error handling is up to the application developer
 pub fn (fs FlagParser) finalize() ?[]string {
   for a in fs.args {
-    if a.left(2) == '--' {
-      return error('Unknown argument \'${a.right(2)}\'')
+    if a.len >= 2 && a[..2] == '--' {
+      return error('Unknown argument \'${a[2..]}\'')
     }
   }
   if fs.args.len < fs.min_free_args && fs.min_free_args > 0 {

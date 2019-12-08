@@ -11,9 +11,9 @@ const (
 	max_redirects = 4
 )
 
-struct Request {
+pub struct Request {
 pub:
-	headers  map[string]string 
+	headers  map[string]string
 	method   string
 	// cookies map[string]string
 	h        string
@@ -21,16 +21,17 @@ pub:
 	typ      string // GET POST
 	data     string
 	url      string
-	ws_func  voidptr
-	user_ptr voidptr
 	verbose  bool
 	user_agent string
+mut:
+	user_ptr voidptr
+	ws_func  voidptr
 }
 
-struct Response {
+pub struct Response {
 pub:
 	text        string
-	headers     map[string]string 
+	headers     map[string]string
 	status_code int
 }
 
@@ -54,9 +55,10 @@ pub fn post(url, data string) ?Response {
 	return res
 }
 
+// new_request creates a new HTTP request
 pub fn new_request(typ, _url, _data string) ?Request {
 	if _url == '' {
-		return error('bad url') 
+		return error('http.new_request: empty url')
 	}
 	mut url := _url
 	mut data := _data
@@ -77,9 +79,9 @@ pub fn new_request(typ, _url, _data string) ?Request {
 }
 
 pub fn get_text(url string) string {
-	resp := get(url) or { return  '' } 
-	return resp.text 
-} 
+	resp := get(url) or { return  '' }
+	return resp.text
+}
 
 fn (req mut Request) free() {
 	req.headers.free()
@@ -89,18 +91,9 @@ fn (resp mut Response) free() {
 	resp.headers.free()
 }
 
+// add_header adds the key and value of an HTTP request header
 pub fn (req mut Request) add_header(key, val string) {
-	// println('start add header')
-	// println('add header "$key" "$val"')
-	// println(key)
-	// println(val)
-	// h := '$key: $val'
-	// println('SET H')
-	// req.headers << h
 	req.headers[key] = val
-	// mut h := req.h
-	// h += ' -H "${key}: ${val}" '
-	// req.h = h
 }
 
 pub fn parse_headers(lines []string) map[string]string {
@@ -118,14 +111,12 @@ pub fn parse_headers(lines []string) map[string]string {
 	return headers
 }
 
+// do will send the HTTP request and returns `http.Response` as soon as the response is recevied
 pub fn (req &Request) do() ?Response {
 	if req.typ == 'POST' {
 		// req.headers << 'Content-Type: application/x-www-form-urlencoded'
 	}
-	for key, val in req.headers {
-		//h := '$key: $val'
-	}
-	url := urllib.parse(req.url) or { return error('http.request.do: invalid URL $req.url') }
+	url := urllib.parse(req.url) or { return error('http.request.do: invalid URL "$req.url"') }
 	mut rurl := url
 	mut resp := Response{}
 	mut no_redirects := 0
@@ -136,7 +127,7 @@ pub fn (req &Request) do() ?Response {
 		if ! (resp.status_code in [301, 302, 303, 307, 308]) { break }
 		// follow any redirects
 		redirect_url := resp.headers['Location']
-		qrurl := urllib.parse( redirect_url ) or { return error('http.request.do: invalid URL in redirect $redirect_url') }
+		qrurl := urllib.parse( redirect_url ) or { return error('http.request.do: invalid URL in redirect "$redirect_url"') }
 		rurl = qrurl
 		no_redirects++
 	}
@@ -146,8 +137,8 @@ pub fn (req &Request) do() ?Response {
 fn (req &Request) method_and_url_to_response(method string, url net_dot_urllib.URL) ?Response {
 	host_name := url.hostname()
 	scheme := url.scheme
-	mut p := url.path.trim_left('/')
-	mut path := if url.query().size > 0 { '/$p?${url.query().encode()}' } else { '/$p' }
+	p := url.path.trim_left('/')
+	path := if url.query().size > 0 { '/$p?${url.query().encode()}' } else { '/$p' }
 	mut nport := url.port().int()
 	if nport == 0 {
 		if scheme == 'http'  { nport = 80  }
@@ -167,89 +158,87 @@ fn (req &Request) method_and_url_to_response(method string, url net_dot_urllib.U
 		}
 		return res
 	}
-	return error('http.request.do: unsupported scheme: $scheme')
+	return error('http.request.method_and_url_to_response: unsupported scheme: "$scheme"')
 }
 
 fn parse_response(resp string) Response {
 	mut headers := map[string]string
-	first_header := resp.all_before('\n') 
-	mut status_code := 0 
+	first_header := resp.all_before('\n')
+	mut status_code := 0
 	if first_header.contains('HTTP/') {
 		val := first_header.find_between(' ', ' ')
 		status_code = val.int()
 	}
-	mut text := '' 
-	// Build resp headers map and separate the body 
-	mut nl_pos := 3 
-	mut i := 1 
-	for { 
-		old_pos := nl_pos 
-		nl_pos = resp.index_after('\n', nl_pos+1) 
+	mut text := ''
+	// Build resp headers map and separate the body
+	mut nl_pos := 3
+	mut i := 1
+	for {
+		old_pos := nl_pos
+		nl_pos = resp.index_after('\n', nl_pos+1)
 		if nl_pos == -1 {
-			break 
-		} 
-		h := resp.substr(old_pos + 1, nl_pos) 
-		// End of headers 
+			break
+		}
+		h := resp[old_pos + 1..nl_pos]
+		// End of headers
 		if h.len <= 1 {
-			text = resp.right(nl_pos + 1) 
-			break 
-		} 
-		i++ 
-		pos := h.index(':')
-		if pos == -1 {
+			text = resp[nl_pos + 1..]
+			break
+		}
+		i++
+		pos := h.index(':') or {
 			continue
 		}
 		//if h.contains('Content-Type') {
 			//continue
 		//}
-		key := h.left(pos)
-		val := h.right(pos + 2)
+		key := h[..pos]
+		val := h[pos+2..]
 		headers[key] = val.trim_space()
 	}
-	
+
 	if headers['Transfer-Encoding'] == 'chunked' {
 		text = chunked.decode( text )
 	}
 
 	return Response {
-		status_code: status_code 
+		status_code: status_code
 		headers: headers
-		text: text 
+		text: text
 	}
 }
 
 fn (req &Request) build_request_headers(method, host_name, path string) string {
 	ua := req.user_agent
 	mut uheaders := []string
-	for key, val in req.headers {	
-		uheaders << '${key}: ${val}\r\n' 
+	for key, val in req.headers {
+		uheaders << '${key}: ${val}\r\n'
 	}
 	if req.data.len > 0 {
 		uheaders << 'Content-Length: ${req.data.len}\r\n'
 	}
-	return '$method $path HTTP/1.1\r\n' + 
-		'Host: $host_name\r\n' + 
+	return '$method $path HTTP/1.1\r\n' +
+		'Host: $host_name\r\n' +
 		'User-Agent: $ua\r\n' +
 		uheaders.join('') +
-		'Connection: close\r\n\r\n' + 
+		'Connection: close\r\n\r\n' +
 		req.data
 }
 
 pub fn unescape_url(s string) string {
-	panic('http.unescape_url() was replaced with urllib.query_unescape()') 
+	panic('http.unescape_url() was replaced with urllib.query_unescape()')
 }
 
 pub fn escape_url(s string) string {
-	panic('http.escape_url() was replaced with urllib.query_escape()') 
+	panic('http.escape_url() was replaced with urllib.query_escape()')
 }
 
 pub fn unescape(s string) string {
-	panic('http.unescape() was replaced with http.unescape_url()') 
+	panic('http.unescape() was replaced with http.unescape_url()')
 }
 
 pub fn escape(s string) string {
-	panic('http.escape() was replaced with http.escape_url()') 
+	panic('http.escape() was replaced with http.escape_url()')
 }
 
 type wsfn fn (s string, ptr voidptr)
-

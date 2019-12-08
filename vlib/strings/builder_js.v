@@ -4,7 +4,7 @@
 
 module strings
 
-struct Builder {
+pub struct Builder {
 mut:
 	buf []byte
 pub:
@@ -15,6 +15,11 @@ pub fn new_builder(initial_size int) Builder {
 	return Builder {
 		buf: make(0, initial_size, sizeof(byte))
 	}
+}
+
+pub fn (b mut Builder) write_b(data byte) {
+	b.buf << data
+	b.len++
 }
 
 pub fn (b mut Builder) write(s string) {
@@ -39,5 +44,4 @@ pub fn (b mut Builder) cut(n int) {
 }
 
 pub fn (b mut Builder) free() {
-	free(b.buf.data)
 }

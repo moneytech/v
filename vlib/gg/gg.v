@@ -11,7 +11,7 @@ import gx
 import os
 import glfw
 
-struct Vec2 {
+pub struct Vec2 {
 pub:
 	x int
 	y int
@@ -32,13 +32,14 @@ pub fn init_gg() {
 }
 
 
-struct Cfg {
+pub struct Cfg {
 pub:
 	width     int
 	height    int
 	use_ortho bool
 	retina    bool
-	
+	resizable bool
+
 	font_size int
 	font_path string
 	create_window bool
@@ -48,11 +49,9 @@ pub:
 	scale int
 }
 
-struct GG {
+pub struct GG {
 	shader    gl.Shader
 	// use_ortho bool
-	width     int
-	height    int
 	vao       u32
 	rect_vao  u32
 	rect_vbo  u32
@@ -60,7 +59,10 @@ struct GG {
 	line_vbo  u32
 	vbo       u32
 	scale     int // retina = 2 , normal = 1
+//pub:
 pub mut:
+	width     int
+	height    int
 	window &glfw.Window
 	render_fn fn()
 }
@@ -68,8 +70,13 @@ pub mut:
 
 // fn new_context(width, height int, use_ortho bool, font_size int) *GG {
 pub fn new_context(cfg Cfg) &GG {
-	mut window := &glfw.Window{!}
+	mut window := &glfw.Window(0)
 	if cfg.create_window {
+		if cfg.resizable {
+			glfw.window_hint(C.GLFW_RESIZABLE, 1)
+		} else {
+			glfw.window_hint(C.GLFW_RESIZABLE, 0)
+		}
 		window = glfw.create_window(glfw.WinCfg{
 			title: cfg.window_title
 			width: cfg.width
@@ -113,7 +120,7 @@ pub fn new_context(cfg Cfg) &GG {
 		vao: vao
 		vbo: vbo
 		window: window
-	
+
 		// /line_vao: gl.gen_vertex_array()
 		// /line_vbo: gl.gen_buffer()
 		//text_ctx: new_context_text(cfg, scale),
@@ -136,8 +143,8 @@ pub fn (gg &GG) render_loop() bool {
 */
 
 pub fn clear(color gx.Color) {
+	gl.clear_color(color.r, color.g, color.b, 255)
 	gl.clear()
-	gl.clear_color(255, 255, 255, 255)
 }
 
 pub fn (gg &GG) render() {
@@ -268,8 +275,8 @@ fn todo_remove_me(cfg Cfg, scale int) {
 	if !cfg.use_ortho {
 		return
 	}
-	mut width := cfg.width * scale
-	mut height := cfg.height * scale
+	width := cfg.width * scale
+	height := cfg.height * scale
 	font_size := cfg.font_size * scale
 	gl.enable(C.GL_BLEND)
 	//# glBlendFunc(C.GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -356,7 +363,7 @@ pub fn create_image(file string) u32 {
 	if file.contains('twitch') {
 		return u32(0)// TODO
 	}
-	if !os.file_exists(file) {
+	if !os.exists(file) {
 		println('gg create image no such file "$file"')
 		return u32(0)
 	}
@@ -375,7 +382,7 @@ pub fn (ctx &GG) draw_line_c(x, y, x2, y2 f32, color gx.Color) {
 	C.glDeleteBuffers(1, &ctx.vbo)
 	ctx.shader.use()
 	ctx.shader.set_color('color', color)
-	vertices := [f32(x), f32(y), f32(x2), f32(y2)] !
+	vertices := [x, y, x2, y2] !
 	gl.bind_vao(ctx.vao)
 	gl.set_vbo(ctx.vbo, vertices, C.GL_STATIC_DRAW)
 	gl.vertex_attrib_pointer(0, 2, C.GL_FLOAT, false, 2, 0)
@@ -426,7 +433,7 @@ pub fn (ctx &GG) draw_image(x, y, w, h f32, tex_id u32) {
 	gl.enable_vertex_attrib_array(1)
 	gl.vertex_attrib_pointer(2, 2, C.GL_FLOAT, false, 8, 6)
 	gl.enable_vertex_attrib_array(2)
-	gl.bind_2d_texture(u32(tex_id))
+	gl.bind_2d_texture(tex_id)
 	gl.bind_vao(ctx.vao)
 	gl.draw_elements(C.GL_TRIANGLES, 6, C.GL_UNSIGNED_INT, 0)
 }
@@ -437,4 +444,3 @@ pub fn (c &GG) draw_empty_rect(x, y, w, h int, color gx.Color) {
 	c.draw_line_c(x, y + h, x + w, y + h, color)
 	c.draw_line_c(x + w, y, x + w, y + h, color)
 }
-

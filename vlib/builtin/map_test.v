@@ -38,6 +38,8 @@ fn test_map() {
 	assert keys[1] == 'hello'
 	m.delete('hi')
 	assert m.size == 1
+	m.delete('aloha')
+	assert m.size == 1
 
 	assert m['hi'] == 0
 	assert m.keys().len == 1
@@ -155,6 +157,27 @@ fn test_string_arr() {
 	assert m['a'][0] == 'one'
 	assert m['a'][1] == 'two'
 }
+
+fn mut_map(m mut map[string]int) {
+	m['a'] = 10
+}
+
+fn test_mut_arg() {
+	mut m := map[string]int
+	mut_map(mut m)
+	assert m['a'] == 10
+}
+
+fn test_delete() {
+	mut m := map[string]int
+	m['one'] = 1
+	m['two'] = 2
+	println(m['two']) // => "2"
+	m.delete('two')
+	println(m['two']) // => 0
+	assert 'two' in m == false
+	println('two' in m) // => true, on Linux  and Windows  <-- wrong !
+}	
 
 /*
 fn test_ref() {

@@ -27,8 +27,6 @@ fn (p mut Parser) warn(s string) {
 	p.warn_with_token_index(s, p.token_idx-1 )
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////
-
 fn (p mut Parser) production_error_with_token_index(e string, tokenindex int) {
 	if p.pref.is_prod {
 		p.error_with_token_index( e, tokenindex )
@@ -37,8 +35,6 @@ fn (p mut Parser) production_error_with_token_index(e string, tokenindex int) {
 	}
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////
-
 fn (p mut Parser) error_with_token_index(s string, tokenindex int) {
 	p.error_with_position(s, p.scanner.get_scanner_pos_of_token( p.tokens[ tokenindex ] ) )
 }
@@ -46,8 +42,6 @@ fn (p mut Parser) error_with_token_index(s string, tokenindex int) {
 fn (p mut Parser) warn_with_token_index(s string, tokenindex int) {
 	p.warn_with_position(s, p.scanner.get_scanner_pos_of_token( p.tokens[ tokenindex ] ) )
 }
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
 
 fn (p mut Parser) error_with_position(s string, sp ScannerPos) {
 	p.print_error_context()
@@ -65,8 +59,6 @@ fn (p mut Parser) warn_with_position(s string, sp ScannerPos) {
 	p.scanner.goto_scanner_position( cpos )
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////
-
 fn (s &Scanner) error(msg string) {
 	s.error_with_col(msg, 0)
 }
@@ -75,16 +67,15 @@ fn (s &Scanner) warn(msg string) {
 	s.warn_with_col(msg, 0)
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////
 fn (s &Scanner) warn_with_col(msg string, col int) {
-	fullpath := s.get_error_filepath()		
+	fullpath := s.get_error_filepath()
 	color_on := s.is_color_output_on()
 	final_message := if color_on { term.bold(term.bright_blue( msg )) } else { msg }
 	eprintln('warning: ${fullpath}:${s.line_nr+1}:${col}: $final_message')
 }
 
 fn (s &Scanner) error_with_col(msg string, col int) {
-	fullpath := s.get_error_filepath()		
+	fullpath := s.get_error_filepath()
 	color_on := s.is_color_output_on()
 	final_message := if color_on { term.red( term.bold( msg ) ) } else { msg }
 	// The filepath:line:col: format is the default C compiler
@@ -94,12 +85,12 @@ fn (s &Scanner) error_with_col(msg string, col int) {
 	// NB: using only the filename may lead to inability of IDE/editors
 	// to find the source file, when the IDE has a different working folder than v itself.
 	eprintln('${fullpath}:${s.line_nr + 1}:${col}: $final_message')
-	
-	if s.should_print_line_on_error && s.file_lines.len > 0 {
-		context_start_line := imax(0,                (s.line_nr - error_context_before + 1 ))
-		context_end_line   := imin(s.file_lines.len, (s.line_nr + error_context_after + 1 ))
+
+	if s.should_print_line_on_error && s.nlines > 0 {
+		context_start_line := imax(0,        (s.line_nr - error_context_before    ))
+		context_end_line   := imin(s.nlines-1, (s.line_nr + error_context_after + 1 ))
 		for cline := context_start_line; cline < context_end_line; cline++ {
-			line := '${(cline+1):5d}| ' + s.file_lines[ cline ]
+			line := '${(cline+1):5d}| ' + s.line( cline )
 			coloredline := if cline == s.line_nr && color_on { term.red(line) } else { line }
 			eprintln( coloredline )
 			if cline != s.line_nr { continue }
@@ -107,7 +98,7 @@ fn (s &Scanner) error_with_col(msg string, col int) {
 			// line, so that it prints the ^ character exactly on the *same spot*
 			// where it is needed. That is the reason we can not just
 			// use strings.repeat(` `, col) to form it.
-			mut pointerline := []string		
+			mut pointerline := []string
 			for i , c in line {
 				if i < col {
 					x := if c.is_space() { c } else { ` ` }
@@ -132,10 +123,16 @@ fn (s &Scanner) error_with_col(msg string, col int) {
 [inline] fn imin(a,b int) int { 	return if a < b { a } else { b } }
 
 fn (s &Scanner) get_error_filepath() string {
-	if s.should_print_relative_paths_on_error {
+	verror_paths_override := os.getenv('VERROR_PATHS')
+	use_relative_paths := match verror_paths_override {
+		'relative' { true }
+		'absolute' { false }
+		else { s.should_print_relative_paths_on_error }
+	}
+	if use_relative_paths {
 		workdir := os.getwd() + os.path_separator
 		if s.file_path.starts_with(workdir) {
-			return s.file_path.replace( workdir, '') 
+			return s.file_path.replace( workdir, '')
 		}
 		return s.file_path
 	}
@@ -143,7 +140,7 @@ fn (s &Scanner) get_error_filepath() string {
 }
 
 fn (s &Scanner) is_color_output_on() bool {
-	return s.should_print_errors_in_color && term.can_show_color_on_stderr()	
+	return s.should_print_errors_in_color && term.can_show_color_on_stderr()
 }
 
 fn (p mut Parser) print_error_context(){
@@ -158,7 +155,7 @@ fn (p mut Parser) print_error_context(){
 	p.cgen.save()
 	// V up hint
 	cur_path := os.getwd()
-	if !p.pref.is_repl && !p.pref.is_test && ( p.file_path_id.contains('v/compiler') || cur_path.contains('v/compiler') ){
+	if !p.pref.is_repl && !p.pref.is_test && ( p.file_path.contains('v/compiler') || cur_path.contains('v/compiler') ){
 		println('\n=========================')
 		println('It looks like you are building V. It is being frequently updated every day.')
 		println('If you didn\'t modify V\'s code, most likely there was a change that ')
@@ -174,12 +171,17 @@ fn (p mut Parser) print_error_context(){
 	// p.scanner.debug_tokens()
 }
 
-fn normalized_error( s string ) string {
+fn normalized_error(s string) string {
 	// Print `[]int` instead of `array_int` in errors
-	return s.replace('array_', '[]')
+	mut res := s.replace('array_', '[]')
 	.replace('__', '.')
 	.replace('Option_', '?')
 	.replace('main.', '')
+	if res.contains('_V_MulRet_') {
+		res = res.replace('_V_MulRet_', '(').replace('_V_', ', ')
+		res = res[..res.len-1] + ')"'
+	}
+	return res
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -211,64 +213,49 @@ fn (s mut Scanner) goto_scanner_position(scp ScannerPos) {
 	s.last_nl_pos = scp.last_nl_pos
 }
 
-// get_scanner_pos_of_token rescans *the whole source* till it reaches {t.line_nr, t.col} .
-fn (s mut Scanner) get_scanner_pos_of_token(t &Token) ScannerPos {
-	// This rescanning is done just once on error, so it is fine for now.
-	// Be careful for the performance implications, if you want to
-	// do it more frequently. The alternative would be to store
-	// the scanpos (12 bytes) for each token, and there are potentially many tokens.
-	tline := t.line_nr
-	tcol  := if t.line_nr == 0 { t.col + 1 } else { t.col - 1 }
-	// save the current scanner position, it will be restored later
-	cpos := s.get_scanner_pos()
-	mut sptoken := ScannerPos{}
-	// Starting from the start, scan the source lines
-	// till the desired tline is reached, then
-	// s.pos + tcol would be the proper position
-	// of the token. Continue scanning for some more lines of context too.
-	s.goto_scanner_position(ScannerPos{})
-	s.file_lines = []string
-
-	mut prevlinepos := 0
-	// NB: TCC BUG workaround: removing the `mut ate:=0 ate++` line
-	// below causes a bug in v, when v is compiled with tcc, and v
-	// wants to report the error: 'the following imports were never used:'
-	//
-	// This can be reproduced, if you follow the steps:
-	// a) ./v -cc tcc -o v compiler ;
-	// b) ./v vlib/builtin/hashmap_test.v'
-	//
-	// In this case, prevlinepos gets a random value on each run.
-	// Any kind of operation may be used seemingly, as long as
-	// there is a new stack allocation that will 'protect' prevlinepos.
-	//////////////////////////////////////////////////////////////////
-	mut ate:=0 ate++ // This var will be smashed by TCC, instead of
-	/////////////////// prevlinepos. The cause is the call to
-	/////////////////// s.get_scanner_pos()
-	/////////////////// which just returns a struct, and that works
-	/////////////////// in gcc and clang, but causes the TCC problem.
-	
-	for {
-		prevlinepos = s.pos
-		if s.pos >= s.text.len { break }		
-		if s.line_nr > tline + 10 { break }
-		////////////////////////////////////////
-		if tline == s.line_nr {
-			sptoken = s.get_scanner_pos()
-			sptoken.pos += tcol
+fn (s &Scanner) get_last_nl_from_pos(_pos int) int {
+	pos := if _pos >= s.text.len { s.text.len-1 } else { _pos }
+	for i := pos; i >= 0; i-- {
+		if s.text[i] == `\n` {
+			return i
 		}
-		s.ignore_line() s.eat_single_newline()
-		sline := s.text.substr( prevlinepos, s.pos )//.trim_right('\r\n')
-		s.file_lines << sline
 	}
-	//////////////////////////////////////////////////
-	s.goto_scanner_position(cpos)
-	return sptoken
+	return 0
 }
 
-fn (s mut Scanner) eat_single_newline(){
-	if s.pos >= s.text.len { return }
-	if s.expect('\r\n', s.pos) { s.pos += 2 return }
-	if s.text[ s.pos ] == `\n` { s.pos ++ return }
-	if s.text[ s.pos ] == `\r` { s.pos ++ return }
+fn (s &Scanner) get_scanner_pos_of_token(tok &Token) ScannerPos {
+	return ScannerPos{
+		pos: tok.pos
+		line_nr: tok.line_nr
+		last_nl_pos: s.get_last_nl_from_pos(tok.pos)
+	}
 }
+
+///////////////////////////////
+
+fn (p mut Parser) mutable_arg_error(i int, arg Var, f Fn) {
+	mut dots_example :=  'mut $p.lit'
+	if i > 0 {
+		dots_example = '.., ' + dots_example
+	}
+	if i < f.args.len - 1 {
+		dots_example = dots_example + ',..'
+	}
+	p.error('`$arg.name` is a mutable argument, you need to provide `mut`: ' +
+			'`$f.name($dots_example)`')
+}
+
+const (
+	warn_match_arrow = '=> is no longer needed in match statements, use\n' +
+'match foo {
+	1 { bar }
+	2 { baz }
+	else { ... }
+}'
+	//make_receiver_mutable =
+
+	err_used_as_value = 'used as value'
+
+	and_or_error = 'use `()` to make the boolean expression clear\n' +
+'for example: `(a && b) || c` instead of `a && b || c`'
+)

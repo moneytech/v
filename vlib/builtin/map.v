@@ -6,7 +6,7 @@ module builtin
 
 import strings
 
-struct map {
+pub struct map {
 	element_size int
 	root      &mapnode
 pub:
@@ -16,7 +16,7 @@ pub:
 struct mapnode {
 	left &mapnode
 	right &mapnode
-	is_empty bool
+	is_empty bool // set by delete()
 	key string
 	val voidptr
 }
@@ -97,7 +97,7 @@ fn (n & mapnode) find(key string, out voidptr, element_size int) bool{
 
 // same as `find`, but doesn't return a value. Used by `exists`
 fn (n & mapnode) find2(key string, element_size int) bool{
-	if n.key == key {
+	if n.key == key && !n.is_empty {
 		return true
 	}
 	else if n.key > key {
@@ -207,8 +207,10 @@ pub fn (n mut mapnode) delete(key string, element_size int) {
 }
 
 pub fn (m mut map) delete(key string) {
-	m.root.delete(key, m.element_size)
-	m.size--
+	if m.exists(key) {
+		m.root.delete(key, m.element_size)
+		m.size--
+	}
 }
 
 fn (m map) exists(key string) bool {

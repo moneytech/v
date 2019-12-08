@@ -30,7 +30,7 @@ struct Asset {
 }
 
 // new_manager returns a new AssetManager
-pub fn new_manager() *AssetManager {
+pub fn new_manager() &AssetManager {
 	return &AssetManager{}
 }
 
@@ -76,7 +76,7 @@ fn (am mut AssetManager) combine(asset_type string, to_file bool) string {
 	out_file := '$am.cache_dir/${cache_key}.$asset_type'
 	mut out := ''
 	// use cache 
-	if os.file_exists(out_file) {
+	if os.exists(out_file) {
 		if to_file {
 			return out_file
 		}    	
@@ -102,10 +102,10 @@ fn (am mut AssetManager) combine(asset_type string, to_file bool) string {
 	if !to_file {
 		return out
 	}
-	if !os.dir_exists(am.cache_dir) {
-		os.mkdir(am.cache_dir)
+	if !os.is_dir(am.cache_dir) {
+		os.mkdir(am.cache_dir) or { panic(err) }
 	}
-	file := os.create(out_file) or {
+	mut file := os.create(out_file) or {
 		panic(err)
 	}
 	file.write(out)
@@ -153,7 +153,7 @@ fn (am mut AssetManager) include(asset_type string, combine bool) string {
 // dont return option until size limit is removed
 // fn (am mut AssetManager) add(asset_type, file string) ?bool {
 fn (am mut AssetManager) add(asset_type, file string) bool {
-	if !os.file_exists(file) {
+	if !os.exists(file) {
 		// return error('vweb.assets: cannot add asset $file, it does not exist')
 		return false
 	}

@@ -39,25 +39,28 @@ pub fn (w mut Writer) write(record []string) ?bool {
 		}
 
 		w.sb.write('"')
-		
+
 		for field.len > 0 {
 			mut i := field.index_any('"\r\n')
 			if i < 0 {
 				i = field.len
 			}
 
-			w.sb.write(field.left(i))
-			field = field.right(i)
+			w.sb.write(field[..i])
+			field = field[i..]
 
 			if field.len > 0 {
 				z := field[0]
-				switch z {
-				case `"`:
-					w.sb.write('""')
-				case `\r` || `\n`:
-					w.sb.write(le)
+				match z {
+					`"` {
+						w.sb.write('""')
+					}
+					`\r`, `\n` {
+						w.sb.write(le)
+					}
+					else {}
 				}
-				field = field.right(1)
+				field = field[1..]
 			}
 		}
 		w.sb.write('"')
@@ -84,6 +87,6 @@ fn (w &Writer) field_needs_quotes(field string) bool {
 	return false
 }
 
-pub fn (w &Writer) str() string {
+pub fn (w mut Writer) str() string {
 	return w.sb.str()
 }

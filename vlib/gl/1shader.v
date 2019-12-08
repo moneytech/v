@@ -10,11 +10,11 @@ import glm
 
 // import darwin
 
-struct Shader {
+pub struct Shader {
 	program_id int
 }
 
-const (
+pub const (
 	TEXT_VERT   = '#version 330 core
 layout (location = 0) in vec4 vertex; // <vec2 pos, vec2 tex>
 out vec2 TexCoords;
@@ -92,8 +92,8 @@ pub fn new_shader(name string) Shader {
 	if name.starts_with('/') {
 		dir = ''
 	}
-	vertex_path := '${dir}${name}.vert'
-	fragment_path := '${dir}${name}.frag'
+	//vertex_path := '${dir}${name}.vert'
+	//fragment_path := '${dir}${name}.frag'
 	//println('shader path=$vertex_path,\n fpath="$fragment_path"')
 	// vertex_src := os.read_file(vertex_path.trim_space())
 	mut vertex_src := ''
@@ -152,6 +152,11 @@ pub fn new_shader(name string) Shader {
 pub fn (s Shader) use() {
 	gl.use_program(s.program_id)
 }
+
+fn C.glGetUniformLocation() int
+fn C.glUniformMatrix4fv()
+fn C.glUniform1i()
+fn C.glUniform3f()
 
 pub fn (s Shader) uni_location(key string) int {
 	return C.glGetUniformLocation(s.program_id, key.str)

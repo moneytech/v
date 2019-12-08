@@ -1,6 +1,6 @@
 module compiler
 
-const (
+pub const (
 	help_text = 'Usage: v [options/commands] [file.v | directory]
 
    When V is run without any arguments, it is run in REPL mode.
@@ -28,6 +28,9 @@ const (
    You can set it like this: `export VFLAGS="-cc clang -debug"` on *nix,
    `set VFLAGS=-cc msvc` on Windows.
 
+   V respects the TMPDIR environment variable, and will put .tmp.c files in TMPDIR/v/ .
+   If you have not set it, a suitable platform specific folder (like /tmp) will be used.
+
 Options/commands:
   -h, help          Display this information.
   -o <file>         Write output to <file>.
@@ -46,6 +49,7 @@ Options/commands:
                     It very significantly speeds up secondary compilations.
 
   -obf              Obfuscate the resulting binary.
+  -compress         Compress the resulting binary.
   -                 Shorthand for `v runrepl`.
 
 Options for debugging/troubleshooting v programs:
@@ -65,13 +69,19 @@ Commands:
   run <file.v>      Build and execute the V program in file.v. You can add arguments for the V program *after* the file name.
   build <module>    Compile a module into an object file.
   runrepl           Run the V REPL. If V is running in a tty terminal, the REPL is interactive, otherwise it just reads from stdin.
-  symlink           Useful on unix systems. Symlinks the current V executable to /usr/local/bin/v, so that V is globally available.
-  install <module>  Install a user module from https://vpm.vlang.io/.
+  symlink           Useful on Unix systems. Symlinks the current V executable to /usr/local/bin/v, so that V is globally available.
   test v            Run all V test files, and compile all V examples.
   test folder/      Run all V test files located in the folder and its subfolders. You can also pass individual _test.v files too.
   fmt               Run vfmt to format the source code. [wip]
-  doc               Run vdoc over the source code and produce documentation. [wip]
+  doc               Run vdoc over the source code and produce documentation.
   translate         Translates C to V. [wip, will be available in V 0.3]
+  create            Create a new v project interactively. Answer the questions, and run it with `v run projectname`
+
+V package management commands:
+  search  keywords  Search the https://vpm.vlang.io/ module repository for matching modules and shows their details.
+  install <module>  Install a user module from https://vpm.vlang.io/.
+  update  [module]  Updates an already installed module, or ALL installed modules at once, when no module name is given.
+  remove  [module]  Removes an installed module, or ALL installed modules at once, when no module name is given.
 '
 )
 

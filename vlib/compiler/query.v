@@ -38,9 +38,9 @@ fn (p mut Parser) select_query(fn_ph int) string {
 	// because we can have many queries in the _same_ scope.
 	qprefix := p.get_tmp().replace('tmp','sql') + '_'
 	p.sql_i = 0
-	p.sql_params = []string
-	p.sql_types = []string
-
+	p.sql_params = []
+	if false {}
+	p.sql_types = []
 	mut q := 'select '
 	p.check(.key_select)
 	n := p.check_name()
@@ -90,21 +90,18 @@ fn (p mut Parser) select_query(fn_ph int) string {
 	// `where` statement
 	if p.tok == .name && p.lit == 'where' {
 		p.next()
-		p.cgen.start_tmp()
 		p.is_sql = true
-		p.bool_expression()
+		_, expr := p.tmp_expr()
 		p.is_sql = false
-		q += ' where ' + p.cgen.end_tmp()
+		q += ' where ' + expr
 	}
 	// limit?
 	mut query_one := false
 	if p.tok == .name && p.lit == 'limit' {
 		p.next()
-		p.cgen.start_tmp()
 		p.is_sql = true
-		p.bool_expression()
+		_, limit := p.tmp_expr()
 		p.is_sql = false
-		limit := p.cgen.end_tmp()
 		q += ' limit ' + limit
 		// `limit 1` means we are getting `?User`, not `[]User`
 		if limit.trim_space() == '1' {
@@ -113,7 +110,7 @@ fn (p mut Parser) select_query(fn_ph int) string {
 	}
 	println('sql query="$q"')
 	p.cgen.insert_before('// DEBUG_SQL prefix: $qprefix | fn_ph: $fn_ph | query: "$q" ')
-	
+
 	if n == 'count' {
 		p.cgen.set_placeholder(fn_ph, 'pg__DB_q_int(')
 		p.gen(', tos2("$q"))')
@@ -173,14 +170,14 @@ for (int i = 0; i < ${qprefix}rows.len; i++) {
 ')
 			p.cgen.resetln('${qprefix}arr_$tmp')
 }
-		
+
 	}
 	if n == 'count' {
 		return 'int'
-	}	else if query_one {		
-		opt_type := 'Option_$table_name'		
+	}	else if query_one {
+		opt_type := 'Option_$table_name'
 		p.cgen.typedefs << 'typedef Option $opt_type;'
-		p.table.register_type( opt_type )
+		p.table.register_builtin( opt_type )
 		return opt_type
 	}  else {
 		p.register_array('array_$table_name')

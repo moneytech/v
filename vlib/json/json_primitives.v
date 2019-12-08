@@ -74,7 +74,7 @@ fn jsdecode_f32(root &C.cJSON) f32 {
 	if isnil(root) {
 		return f32(0)
 	}
-	return f32(root.valuedouble)
+	return root.valuedouble
 }
 
 fn jsdecode_f64(root &C.cJSON) f64 {
@@ -96,6 +96,13 @@ fn jsdecode_string(root &C.cJSON) string {
 	// return tos(root.valuestring, _strlen(root.valuestring))
 	return tos_clone(root.valuestring)// , _strlen(root.valuestring))
 }
+
+fn C.cJSON_IsTrue() bool
+fn C.cJSON_CreateNumber() &C.cJSON
+fn C.cJSON_CreateBool() &C.cJSON
+fn C.cJSON_CreateString() &C.cJSON
+fn C.cJSON_Parse() &C.cJSON
+fn C.cJSON_PrintUnformatted() byteptr
 
 fn jsdecode_bool(root &C.cJSON) bool {
 	if isnil(root) {

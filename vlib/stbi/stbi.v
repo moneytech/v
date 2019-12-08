@@ -11,7 +11,7 @@ module stbi
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-struct Image {
+pub struct Image {
 mut:
 	width       int
 	height      int
@@ -20,6 +20,10 @@ mut:
 	data        voidptr
 	ext         string
 }
+
+fn C.stbi_load() voidptr
+fn C.stbi_image_free()
+fn C.stbi_set_flip_vertically_on_load()
 
 pub fn load(path string) Image {
 	ext := path.all_after('.')

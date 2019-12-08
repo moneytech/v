@@ -1,3 +1,15 @@
+
+fn opt_err_with_code() ?string {return error_with_code('hi',137)}
+fn test_err_with_code(){
+	v := opt_err_with_code() or {
+		assert err == 'hi'
+		assert errcode == 137
+		return
+	}
+	assert false
+	println(v) // suppress not used error
+}
+
 fn opt_err() ?string {return error('hi')}
 
 fn test_err(){
@@ -45,4 +57,58 @@ fn test_if_opt() {
 	}
 	assert 1 == 1
 	println('nice')
+}
+
+fn for_opt_default() ?string {
+        return error('awww')
+}
+
+fn test_opt_default() {
+	a := for_opt_default() or {
+			// panic(err)
+			'default'
+	}
+	assert a == 'default'
+}
+
+fn foo_ok() ?int {
+	return 777
+}	
+
+fn foo_str() ?string {
+	return 'something'
+}
+
+fn test_q() {
+	//assert foo_ok()? == true
+}	
+
+struct Person {
+mut:
+	name string
+	age int
+	title ?string
+}
+
+fn test_field_or() {
+	name := foo_str() or {
+		'nada'
+	}
+	assert name == 'something'
+
+	mut p := Person {}
+	p.name = foo_str() or {
+		'nothing'
+	}
+	assert p.name == 'something'
+
+	p.age = foo_ok() or {
+		panic('no age')
+	}
+	assert p.age == 777
+
+	mytitle := p.title or {
+		'default'
+	}
+	assert mytitle == 'default'
 }

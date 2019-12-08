@@ -4,16 +4,16 @@
 
 module os
 
-import strings
+import filepath
 
 #include <sys/stat.h>
-#include <signal.h>
+//#include <signal.h>
 #include <errno.h>
 
 /*
 struct dirent {
-               d_ino int
-               d_off int
+     d_ino int
+     d_off int
 	d_reclen u16
 	d_type byte
 	d_name [256]byte
@@ -26,17 +26,15 @@ struct C.dirent {
 
 fn C.readdir(voidptr) C.dirent
 
-const (
+pub const (
 	args = []string
 	MAX_PATH = 4096
 )
 
-struct C.FILE {
-	
-}
-
-struct File {
-	cfile &FILE
+pub struct File {
+	cfile voidptr // Using void* instead of FILE*
+mut:
+	opened bool
 }
 
 struct FileInfo {
@@ -46,7 +44,7 @@ struct FileInfo {
 
 struct C.stat {
 	st_size int
-	st_mode int
+	st_mode u32
 	st_mtime int
 }
 
@@ -68,8 +66,42 @@ mut:
 
 fn C.getline(voidptr, voidptr, voidptr) int
 fn C.ftell(fp voidptr) int
-fn C.getenv(byteptr) byteptr
+fn C.getenv(byteptr) &char
 fn C.sigaction(int, voidptr, int)
+
+
+pub fn (f File) is_opened() bool {
+	return f.opened
+}
+
+// read_bytes reads an amount of bytes from the beginning of the file
+pub fn (f mut File) read_bytes(size int) []byte {
+	return f.read_bytes_at(size, 0)
+}
+
+// read_bytes_at reads an amount of bytes at the given position in the file
+pub fn (f mut File) read_bytes_at(size, pos int) []byte {
+	mut arr	 := [`0`].repeat(size)
+	C.fseek(f.cfile, pos, C.SEEK_SET)
+	nreadbytes := C.fread(arr.data, 1, size, f.cfile)
+	C.fseek(f.cfile, 0, C.SEEK_SET)
+	return arr[0..nreadbytes]
+}
+
+pub fn read_bytes(path string) ?[]byte {
+	mut fp := vfopen(path, 'rb')
+	if isnil(fp) {
+		return error('failed to open file "$path"')
+	}
+	C.fseek(fp, 0, C.SEEK_END)
+	fsize := C.ftell(fp)
+	C.rewind(fp)
+	println('fsize=$fsize')
+	mut res	 := [`0`].repeat(fsize)
+	nreadbytes := C.fread(res.data, fsize, 1, fp)
+	C.fclose(fp)
+	return res[0..nreadbytes]
+}
 
 // read_file reads the file in `path` and returns the contents.
 pub fn read_file(path string) ?string {
@@ -93,9 +125,9 @@ pub fn read_file(path string) ?string {
 pub fn file_size(path string) int {
 	mut s := C.stat{}
 	$if windows {
-		C._wstat(path.to_wide(), &s)
+		C._wstat(path.to_wide(), voidptr(&s))
 	} $else {
-		C.stat(*char(path.str), &s)
+		C.stat(charptr(path.str), &s)
 	}
 	return s.st_size
 }
@@ -104,21 +136,91 @@ pub fn mv(old, new string) {
 	$if windows {
 		C._wrename(old.to_wide(), new.to_wide())
 	} $else {
-		C.rename(*char(old.str), *char(new.str))
+		C.rename(charptr(old.str), charptr(new.str))
 	}
+}
+
+fn C.CopyFile(&u32, &u32, int) int
+
+// TODO implement actual cp for linux
+pub fn cp(old, new string) ?bool {
+	$if windows {
+		_old := old.replace('/', '\\')
+		_new := new.replace('/', '\\')
+		C.CopyFile(_old.to_wide(), _new.to_wide(), false)
+
+		result := C.GetLastError()
+		if result == 0 {
+			return true
+		} else {
+			return error_with_code('failed to copy $old to $new', int(result))
+		}
+	} $else {
+		os.system('cp $old $new')
+		return true // TODO make it return true or error when cp for linux is implemented
+	}
+}
+
+pub fn cp_r(osource_path, odest_path string, overwrite bool) ?bool{
+	source_path := os.realpath( osource_path )
+	dest_path := os.realpath( odest_path )
+	if !os.exists(source_path) {
+		return error('Source path doesn\'t exist')
+	}
+	//single file copy
+	if !os.is_dir(source_path) {
+		adjasted_path := if os.is_dir(dest_path) {
+			filepath.join(dest_path, os.filename(source_path))
+		} else {
+			dest_path
+		}
+		if os.exists(adjasted_path) {
+			if overwrite {
+				os.rm(adjasted_path)
+			}
+			else {
+				return error('Destination file path already exist')
+			}
+		}
+		os.cp(source_path, adjasted_path) or { return error(err) }
+		return true
+	}
+	if !os.is_dir(dest_path) {
+		return error('Destination path is not a valid directory')
+	}
+	files := os.ls(source_path) or { return error(err) }
+	for file in files {
+		sp := filepath.join(source_path, file)
+		dp := filepath.join(dest_path, file)
+		if os.is_dir(sp) {
+			os.mkdir(dp) or { panic(err) }
+		}
+		cp_r(sp, dp, overwrite) or {
+			os.rmdir(dp)
+			panic(err)
+		}
+	}
+	return true
+}
+
+// mv_by_cp first copies the source file, and if it is copied successfully, deletes the source file.
+// mv_by_cp may be used when you are not sure that the source and target are on the same mount/partition.
+pub fn mv_by_cp(source string, target string) ?bool {
+	os.cp(source, target) or { return error(err) }
+	os.rm(source)
+	return true
 }
 
 fn vfopen(path, mode string) *C.FILE {
 	$if windows {
 		return C._wfopen(path.to_wide(), mode.to_wide())
 	} $else {
-		return C.fopen(*char(path.str), *char(mode.str))
+		return C.fopen(charptr(path.str), charptr(mode.str))
 	}
-}	
+}
 
 // read_lines reads the file in `path` into an array of lines.
-// TODO return `?[]string` TODO implement `?[]` support
-pub fn read_lines(path string) []string {
+pub fn read_lines(path string) ?[]string {
 	mut res := []string
 	mut buf_len := 1024
 	mut buf := malloc(buf_len)
@@ -126,9 +228,7 @@ pub fn read_lines(path string) []string {
 	mode := 'rb'
 	mut fp := vfopen(path, mode)
 	if isnil(fp) {
-		// TODO
-		// return error('failed to open file "$path"')
-		return res
+		return error('read_lines() failed to open file "$path"')
 	}
 
 	mut buf_index := 0
@@ -138,7 +238,7 @@ pub fn read_lines(path string) []string {
 			buf_len *= 2
 			buf = C.realloc(buf, buf_len)
 			if isnil(buf) {
-				panic('Could not reallocate the read buffer')
+				return error('could not reallocate the read buffer')
 			}
 			buf_index = len
 			continue
@@ -156,8 +256,10 @@ pub fn read_lines(path string) []string {
 	return res
 }
 
-fn read_ulines(path string) []ustring {
-	lines := read_lines(path)
+fn read_ulines(path string) ?[]ustring {
+	lines := read_lines(path) or {
+		return err
+	}
 	// mut ulines := new_array(0, lines.len, sizeof(ustring))
 	mut ulines := []ustring
 	for myline in lines {
@@ -172,18 +274,19 @@ pub fn open(path string) ?File {
 	$if windows {
 		wpath := path.to_wide()
 		mode := 'rb'
-		file = File {			
+		file = File {
 			cfile: C._wfopen(wpath, mode.to_wide())
 		}
 	} $else {
 		cpath := path.str
 		file = File {
-			cfile: C.fopen(*char(cpath), 'rb')
+			cfile: C.fopen(charptr(cpath), 'rb')
 		}
 	}
 	if isnil(file.cfile) {
 		return error('failed to open file "$path"')
 	}
+	file.opened = true
 	return file
 }
 
@@ -193,18 +296,19 @@ pub fn create(path string) ?File {
 	$if windows {
 		wpath := path.replace('/', '\\').to_wide()
 		mode := 'wb'
-		file = File {			
+		file = File {
 			cfile: C._wfopen(wpath, mode.to_wide())
 		}
 	} $else {
 		cpath := path.str
 		file = File {
-			cfile: C.fopen(*char(cpath), 'wb')
+			cfile: C.fopen(charptr(cpath), 'wb')
 		}
 	}
 	if isnil(file.cfile) {
 		return error('failed to create file "$path"')
 	}
+	file.opened = true
 	return file
 }
 
@@ -213,22 +317,23 @@ pub fn open_append(path string) ?File {
 	$if windows {
 		wpath := path.replace('/', '\\').to_wide()
 		mode := 'ab'
-		file = File {			
+		file = File {
 			cfile: C._wfopen(wpath, mode.to_wide())
 		}
 	} $else {
 		cpath := path.str
 		file = File {
-			cfile: C.fopen(*char(cpath), 'ab')
+			cfile: C.fopen(charptr(cpath), 'ab')
 		}
 	}
 	if isnil(file.cfile) {
 		return error('failed to create(append) file "$path"')
 	}
+	file.opened = true
 	return file
 }
 
-pub fn (f File) write(s string) {
+pub fn (f mut File) write(s string) {
 	C.fputs(s.str, f.cfile)
 	// C.fwrite(s.str, 1, s.len, f.cfile)
 }
@@ -236,17 +341,18 @@ pub fn (f File) write(s string) {
 // convert any value to []byte (LittleEndian) and write it
 // for example if we have write(7, 4), "07 00 00 00" gets written
 // write(0x1234, 2) => "34 12"
-pub fn (f File) write_bytes(data voidptr, size int) {
+pub fn (f mut File) write_bytes(data voidptr, size int) {
 	C.fwrite(data, 1, size, f.cfile)
 }
 
-pub fn (f File) write_bytes_at(data voidptr, size, pos int) {
+pub fn (f mut File) write_bytes_at(data voidptr, size, pos int) {
 	C.fseek(f.cfile, pos, C.SEEK_SET)
 	C.fwrite(data, 1, size, f.cfile)
 	C.fseek(f.cfile, 0, C.SEEK_END)
 }
 
-pub fn (f File) writeln(s string) {
+pub fn (f mut File) writeln(s string) {
+	if !f.opened { return }
 	// C.fwrite(s.str, 1, s.len, f.cfile)
 	// ss := s.clone()
 	// TODO perf
@@ -255,16 +361,20 @@ pub fn (f File) writeln(s string) {
 	C.fputs('\n', f.cfile)
 }
 
-pub fn (f File) flush() {
+pub fn (f mut File) flush() {
+	if !f.opened { return }
 	C.fflush(f.cfile)
 }
 
-pub fn (f File) close() {
+pub fn (f mut File) close() {
+	if !f.opened { return }
+	f.opened = false
+	C.fflush(f.cfile)
 	C.fclose(f.cfile)
 }
 
 // system starts the specified command, waits for it to complete, and returns its code.
-fn popen(path string) *C.FILE {
+fn vpopen(path string) voidptr {//*C.FILE {
 	$if windows {
 		mode := 'rb'
 		wpath := path.to_wide()
@@ -287,7 +397,7 @@ fn posix_wait4_to_exit_status(waitret int) (int,bool) {
 		if C.WIFEXITED( waitret ) {
 			ret = C.WEXITSTATUS( waitret )
 			is_signaled = false
-		} else if C.WIFSIGNALED( waitret ){		
+		} else if C.WIFSIGNALED( waitret ){
 			ret = C.WTERMSIG( waitret )
 			is_signaled = true
 		}
@@ -295,51 +405,34 @@ fn posix_wait4_to_exit_status(waitret int) (int,bool) {
 	}
 }
 
-fn pclose(f *C.FILE) int {
+fn vpclose(f voidptr) int {
 	$if windows {
-		return int( C._pclose(f) )
+		return C._pclose(f)
 	}
 	$else {
-		ret , _ := posix_wait4_to_exit_status( int( C.pclose(f) ) )
+		ret , _ := posix_wait4_to_exit_status(C.pclose(f))
 		return ret
 	}
 }
 
-struct Result {
+pub struct Result {
 pub:
 	exit_code int
 	output string
 	//stderr string // TODO
 }
 
-// exec starts the specified command, waits for it to complete, and returns its output.
-pub fn exec(cmd string) ?Result {
-	pcmd := '$cmd 2>&1'
-	f := popen(pcmd)
-	if isnil(f) {
-		return error('exec("$cmd") failed')
-	}
-	buf := [1000]byte
-	mut res := ''
-	for C.fgets(*char(buf), 1000, f) != 0 {
-		res += tos(buf, vstrlen(buf))
-	}
-	res = res.trim_space()
-	exit_code := pclose(f)
-	//if exit_code != 0 {
-		//return error(res)
-	//}
-	return Result {
-		output: res
-		exit_code: exit_code
-	}
-}
-
 // `system` works like `exec()`, but only returns a return code.
 pub fn system(cmd string) int {
-	mut ret := int(0)
+	//if cmd.contains(';') || cmd.contains('&&') || cmd.contains('||') || cmd.contains('\n') {
+		// TODO remove panic
+		//panic(';, &&, || and \\n are not allowed in shell commands')
+	//}
+	mut ret := 0
 	$if windows {
-		ret = C._wsystem(cmd.to_wide())
+		// overcome bug in system & _wsystem (cmd) when first char is quote `"`
+		wcmd := if cmd.len > 1 && cmd[0] == `"` && cmd[1] != `"` { '"$cmd"' } else { cmd }
+		ret = C._wsystem(wcmd.to_wide())
 	} $else {
 		ret = C.system(cmd.str)
 	}
@@ -359,67 +452,66 @@ pub fn system(cmd string) int {
 
 pub fn sigint_to_signal_name(si int) string {
 	// POSIX signals:
-	switch si {
-	case  1: return 'SIGHUP'
-	case  2: return 'SIGINT'
-	case  3: return 'SIGQUIT'
-	case  4: return 'SIGILL'
-	case  6: return 'SIGABRT'
-	case  8: return 'SIGFPE'
-	case  9: return 'SIGKILL'
-	case 11: return 'SIGSEGV'
-	case 13: return 'SIGPIPE'
-	case 14: return 'SIGALRM'
-	case 15: return 'SIGTERM'
+	match si {
+		1 {return 'SIGHUP'}
+		2 {return 'SIGINT'}
+		3 {return 'SIGQUIT'}
+		4 {return 'SIGILL'}
+		6 {return 'SIGABRT'}
+		8 {return 'SIGFPE'}
+		9 {return 'SIGKILL'}
+		11 {return 'SIGSEGV'}
+		13 {return 'SIGPIPE'}
+		14 {return 'SIGALRM'}
+		15 {return 'SIGTERM'}
+		else { }
 	}
-	///////////////////////////////////
 	$if linux {
 		// From `man 7 signal` on linux:
-		switch si {
-		case 30,10,16: return 'SIGUSR1'
-		case 31,12,17: return 'SIGUSR2'
-		case 20,17,18: return 'SIGCHLD'
-		case 19,18,25: return 'SIGCONT'
-		case 17,19,23: return 'SIGSTOP'
-		case 18,20,24: return 'SIGTSTP'
-		case 21,21,26: return 'SIGTTIN'
-		case 22,22,27: return 'SIGTTOU'
-		///////////////////////////////
-		case 5: return 'SIGTRAP'
-		case 7: return 'SIGBUS'		
+		match si {
+			30,10,16{ return 'SIGUSR1'}
+			31,12,17{ return 'SIGUSR2'}
+			20,17,18{ return 'SIGCHLD'}
+			19,18,25{ return 'SIGCONT'}
+			17,19,23{ return 'SIGSTOP'}
+			18,20,24{ return 'SIGTSTP'}
+			21,21,26{ return 'SIGTTIN'}
+			22,22,27{ return 'SIGTTOU'}
+			///////////////////////////////
+			5{ return 'SIGTRAP'}
+			7{ return 'SIGBUS'		}
+			else {}
 		}
 	}
 	return 'unknown'
 }
 
 // `getenv` returns the value of the environment variable named by the key.
-pub fn getenv(key string) string {	
+pub fn getenv(key string) string {
 	$if windows {
 		s := C._wgetenv(key.to_wide())
-		if isnil(s) {
+		if s == 0 {
 			return ''
 		}
 		return string_from_wide(s)
 	} $else {
-		s := *byte(C.getenv(key.str))
-		if isnil(s) {
+		s := C.getenv(key.str)
+		if s == 0 {
 			return ''
 		}
-		return string(s)
+		// NB: C.getenv *requires* that the result be copied.
+		return cstring_to_vstring( byteptr(s) )
 	}
 }
 
 pub fn setenv(name string, value string, overwrite bool) int {
 	$if windows {
 		format := '$name=$value'
-
 		if overwrite {
 			return C._putenv(format.str)
 		}
-
 		return -1
-	}
-	$else {
+	} $else {
 		return C.setenv(name.str, value.str, overwrite)
 	}
 }
@@ -427,22 +519,25 @@ pub fn setenv(name string, value string, overwrite bool) int {
 pub fn unsetenv(name string) int {
 	$if windows {
 		format := '${name}='
-		
 		return C._putenv(format.str)
-	}
-	$else {
+	} $else {
 		return C.unsetenv(name.str)
 	}
 }
 
-// file_exists returns true if `path` exists.
-pub fn file_exists(_path string) bool {
+// exists returns true if `path` exists.
+pub fn exists(path string) bool {
 	$if windows {
-		path := _path.replace('/', '\\')
-		return C._waccess(path.to_wide(), 0) != -1
+		p := path.replace('/', '\\')
+		return C._waccess(p.to_wide(), 0) != -1
 	} $else {
-		return C.access(_path.str, 0 ) != -1
+		return C.access(path.str, 0 ) != -1
 	}
+}
+
+[deprecated]
+pub fn file_exists(_path string) bool {
+	panic('use os.exists(path) instead of os.file_exists(path)')
 }
 
 // rm removes file in `path`.
@@ -460,7 +555,7 @@ pub fn rm(path string) {
 // rmdir removes a specified directory.
 pub fn rmdir(path string) {
 	$if !windows {
-		C.rmdir(path.str)		
+		C.rmdir(path.str)
 	}
 	$else {
 		C.RemoveDirectory(path.to_wide())
@@ -478,7 +573,7 @@ pub fn ext(path string) string {
 	if pos == -1 {
 		return ''
 	}
-	return path.right(pos)
+	return path[pos..]
 }
 
 
@@ -491,7 +586,7 @@ pub fn dir(path string) string {
 	if pos == -1 {
 		return '.'
 	}
-	return path.left(pos)
+	return path[..pos]
 }
 
 fn path_sans_ext(path string) string {
@@ -499,7 +594,7 @@ fn path_sans_ext(path string) string {
 	if pos == -1 {
 		return path
 	}
-	return path.left(pos)
+	return path[..pos]
 }
 
 
@@ -508,7 +603,7 @@ pub fn basedir(path string) string {
 	if pos == -1 {
 		return path
 	}
-	return path.left(pos + 1)
+	return path[..pos ] // NB: *without* terminating /
 }
 
 pub fn filename(path string) string {
@@ -530,20 +625,20 @@ pub fn get_line() string {
 pub fn get_raw_line() string {
     $if windows {
         max_line_chars := 256
-        buf := &byte(malloc(max_line_chars*2))
-        if is_atty(0) {
+        buf := malloc(max_line_chars*2)
+        if is_atty(0) > 0 {
             h_input := C.GetStdHandle(STD_INPUT_HANDLE)
-            mut nr_chars := 0
-            C.ReadConsole(h_input, buf, max_line_chars * 2, &nr_chars, 0)
-            return string_from_wide2(&u16(buf), nr_chars)
+            mut nr_chars := u32(0)
+            C.ReadConsole(h_input, buf, max_line_chars * 2, voidptr(&nr_chars), 0)
+            return string_from_wide2(&u16(buf), int(nr_chars))
         }
-        res := int( C.fgetws(buf, max_line_chars, C.stdin ) )
-        len := int(  C.wcslen(&u16(buf)) )
-        if 0 != res { return string_from_wide2( &u16(buf), len ) }
+        res := C.fgetws(&u16(buf), max_line_chars, C.stdin )
+        len := C.wcslen(&u16(buf))
+        if !isnil(res) { return string_from_wide2( &u16(buf), len ) }
         return ''
     } $else {
         max := size_t(256)
-        buf := *char(malloc(int(max)))
+        buf := charptr(malloc(int(max)))
         nr_chars := C.getline(&buf, &max, stdin)
         if nr_chars == 0 {
             return ''
@@ -567,24 +662,25 @@ pub fn get_lines() []string {
 }
 
 pub fn get_lines_joined() string {
-        mut line := ''
-        mut inputstr := ''
-        for {
-                line = get_line()
-                if(line.len <= 0) {
-                        break
-                }
-                line = line.trim_space()
-                inputstr += line
-        }
-        return inputstr
+	mut line := ''
+	mut inputstr := ''
+	for {
+		line = get_line()
+		if line.len <= 0 {
+			break
+		}
+		line = line.trim_space()
+		inputstr += line
+	}
+	return inputstr
 }
 
+// user_os returns current user operating system name.
 pub fn user_os() string {
 	$if linux {
 		return 'linux'
 	}
-	$if mac {
+	$if macos {
 		return 'mac'
 	}
 	$if windows {
@@ -607,6 +703,9 @@ pub fn user_os() string {
 	}
 	$if solaris {
 		return 'solaris'
+	}
+	$if haiku {
+		return 'haiku'
 	}
 	return 'unknown'
 }
@@ -631,23 +730,26 @@ pub fn home_dir() string {
 
 // write_file writes `text` data to a file in `path`.
 pub fn write_file(path, text string) {
-	f := os.create(path) or {
+	mut f := os.create(path) or {
 		return
 	}
 	f.write(text)
 	f.close()
 }
 
+// clear clears current terminal screen.
 pub fn clear() {
-	C.printf('\x1b[2J')
-	C.printf('\x1b[H')
+	$if !windows {
+		C.printf('\x1b[2J')
+		C.printf('\x1b[H')
+	}
 }
 
-fn on_segfault(f voidptr) {
+pub fn on_segfault(f voidptr) {
 	$if windows {
 		return
 	}
-	$if mac {
+	$if macos {
 		mut sa := C.sigaction{}
 		C.memset(&sa, 0, sizeof(sigaction))
 		C.sigemptyset(&sa.sa_mask)
@@ -659,34 +761,39 @@ fn on_segfault(f voidptr) {
 
 fn C.getpid() int
 fn C.proc_pidpath (int, byteptr, int) int
+fn C.readlink() int
 
+
+// executable returns the path name of the executable that started the current
+// process.
 pub fn executable() string {
 	$if linux {
-		mut result := malloc(MAX_PATH)
-		count := int(C.readlink('/proc/self/exe', result, MAX_PATH ))
+		mut result := calloc(MAX_PATH)
+		count := C.readlink('/proc/self/exe', result, MAX_PATH)
 		if count < 0 {
-			panic('error reading /proc/self/exe to get exe path')
+			eprintln('os.executable() failed at reading /proc/self/exe to get exe path')
+			return os.args[0]
 		}
-		return string(result, count)
+		return string(result)
 	}
 	$if windows {
 		max := 512
-		mut result := &u16(malloc(max*2)) // MAX_PATH * sizeof(wchar_t)
-		len := int(C.GetModuleFileName( 0, result, max ))
+		mut result := &u16(calloc(max*2)) // MAX_PATH * sizeof(wchar_t)
+		len := C.GetModuleFileName( 0, result, max )
 		return string_from_wide2(result, len)
 	}
-	$if mac {
-		mut result := malloc(MAX_PATH)
+	$if macos {
+		mut result := calloc(MAX_PATH)
 		pid := C.getpid()
-		ret := C.proc_pidpath (pid, result, MAX_PATH)
+		ret := proc_pidpath (pid, result, MAX_PATH)
 		if ret <= 0  {
-			println('os.executable() failed')
-			return '.'
+			eprintln('os.executable() failed at calling proc_pidpath with pid: $pid . proc_pidpath returned $ret ')
+			return os.args[0]
 		}
 		return string(result)
 	}
 	$if freebsd {
-		mut result := malloc(MAX_PATH)
+		mut result := calloc(MAX_PATH)
 		mib := [1 /* CTL_KERN */, 14 /* KERN_PROC */, 12 /* KERN_PROC_PATHNAME */, -1]
 		size := MAX_PATH
 		C.sysctl(mib.data, 4, result, &size, 0, 0)
@@ -699,43 +806,72 @@ pub fn executable() string {
 	}
 	$if solaris {
 	}
+	$if haiku {
+	}
 	$if netbsd {
-		mut result := malloc(MAX_PATH)
+		mut result := calloc(MAX_PATH)
 		count := int(C.readlink('/proc/curproc/exe', result, MAX_PATH ))
 		if count < 0 {
-			panic('error reading /proc/curproc/exe to get exe path')
+			eprintln('os.executable() failed at reading /proc/curproc/exe to get exe path')
+			return os.args[0]
 		}
 		return string(result, count)
 	}
 	$if dragonfly {
-		mut result := malloc(MAX_PATH)
+		mut result := calloc(MAX_PATH)
 		count := int(C.readlink('/proc/curproc/file', result, MAX_PATH ))
 		if count < 0 {
-			panic('error reading /proc/curproc/file to get exe path')
+			eprintln('os.executable() failed at reading /proc/curproc/file to get exe path')
+			return os.args[0]
 		}
 		return string(result, count)
 	}
 	return os.args[0]
 }
 
+[deprecated]
+pub fn dir_exists(path string) bool {
+	panic('use os.is_dir()')
+	//return false
+}
+
+// is_dir returns a boolean indicating whether the given path is a directory.
 pub fn is_dir(path string) bool {
 	$if windows {
-		return dir_exists(path)
-		//val := int(C.GetFileAttributes(path.to_wide()))
-		// Note: this return is broke (wrong). we have dir_exists already how will this differ?
-		//return (val &FILE_ATTRIBUTE_DIRECTORY) > 0
+		_path := path.replace('/', '\\')
+		attr := C.GetFileAttributesW(_path.to_wide())
+		if attr == u32(C.INVALID_FILE_ATTRIBUTES) {
+			return false
+		}
+		if int(attr) & C.FILE_ATTRIBUTE_DIRECTORY != 0 {
+			return true
+		}
+		return false
 	}
 	$else {
 		statbuf := C.stat{}
-		cstr := path.str
-		if C.stat(cstr, &statbuf) != 0 {
+		if C.stat(path.str, &statbuf) != 0 {
 			return false
 		}
 		// ref: https://code.woboq.org/gcc/include/sys/stat.h.html
-		return (statbuf.st_mode & S_IFMT) == S_IFDIR
+		return int(statbuf.st_mode) & S_IFMT == S_IFDIR
 	}
 }
 
+// is_link returns a boolean indicating whether the given path is a link.
+pub fn is_link(path string) bool {
+	$if windows {
+		return false // TODO
+	} $else {
+		statbuf := C.stat{}
+		if C.lstat(path.str, &statbuf) != 0 {
+			return false
+		}
+		return int(statbuf.st_mode) & S_IFMT == S_IFLNK
+	}
+}
+
+// chdir changes the current working directory to the new directory path.
 pub fn chdir(path string) {
 	$if windows {
 		C._wchdir(path.to_wide())
@@ -745,17 +881,18 @@ pub fn chdir(path string) {
 	}
 }
 
-pub fn getwd() string {	
+// getwd returns the absolute path name of the current directory.
+pub fn getwd() string {
 	$if windows {
 		max := 512 // MAX_PATH * sizeof(wchar_t)
-		buf := &u16(malloc(max*2))
+		buf := &u16(calloc(max*2))
 		if C._wgetcwd(buf, max) == 0 {
 			return ''
 		}
 		return string_from_wide(buf)
 	}
 	$else {
-		buf := malloc(512)
+		buf := calloc(512)
 		if C.getcwd(buf, 512) == 0 {
 			return ''
 		}
@@ -769,32 +906,35 @@ pub fn getwd() string {
 //  and https://insanecoding.blogspot.com/2007/11/implementing-realpath-in-c.html
 // NB: this particular rabbit hole is *deep* ...
 pub fn realpath(fpath string) string {
-	mut fullpath := malloc( MAX_PATH )
-	mut res := 0
+	mut fullpath := calloc(MAX_PATH)
+	mut ret := charptr(0)
 	$if windows {
-		res = int( C._fullpath( fullpath, fpath.str, MAX_PATH ) )
+		ret = C._fullpath(fullpath, fpath.str, MAX_PATH)
+		if ret == 0 {
+			return fpath
+		}
+	} $else {
+		ret = C.realpath(fpath.str, fullpath)
+		if ret == 0 {
+			return fpath
+		}
 	}
-	$else{
-		res = int( C.realpath( fpath.str, fullpath ) )
-	}
-	if res != 0 {
-		return string(fullpath, vstrlen(fullpath))
-	}
-	return fpath
+	return string(fullpath)
 }
 
 // walk_ext returns a recursive list of all file paths ending with `ext`.
 pub fn walk_ext(path, ext string) []string {
 	if !os.is_dir(path) {
-		return []string
+		return []
 	}
 	mut files := os.ls(path) or { panic(err) }
 	mut res := []string
+	separator := if path.ends_with(path_separator) { '' } else { path_separator}
 	for i, file in files {
 		if file.starts_with('.') {
 			continue
 		}
-		p := path + path_separator + file
+		p := path + separator + file
 		if os.is_dir(p) {
 			res << walk_ext(p, ext)
 		}
@@ -803,6 +943,25 @@ pub fn walk_ext(path, ext string) []string {
 		}
 	}
 	return res
+}
+
+// walk recursively traverse the given directory path.
+// When a file is encountred it will call the callback function with current file as argument.
+pub fn walk(path string, fnc fn(path string)) {
+	if !os.is_dir(path) {
+		return
+	}
+	mut files := os.ls(path) or { panic(err) }
+	for file in files {
+		p := path + os.path_separator + file
+		if os.is_dir(p) {
+			walk(p, fnc)
+		}
+		else if os.exists(p) {
+			fnc(p)
+		}
+	}
+	return
 }
 
 pub fn signal(signum int, handler voidptr) {
@@ -814,19 +973,25 @@ fn C.fork() int
 fn C.wait() int
 
 pub fn fork() int {
+	mut pid := -1
 	$if !windows {
-		pid := C.fork()
-		return pid
+		pid = C.fork()
 	}
-	panic('os.fork not supported in windows') // TODO
+	$if windows {
+		panic('os.fork not supported in windows') // TODO
+	}
+	return pid
 }
 
 pub fn wait() int {
+	mut pid := -1
 	$if !windows {
-		pid := C.wait(0)
-		return pid
+		pid = C.wait(0)
 	}
-	panic('os.wait not supported in windows') // TODO
+	$if !windows {
+		panic('os.wait not supported in windows') // TODO
+	}
+	return pid
 }
 
 pub fn file_last_mod_unix(path string) int {
@@ -861,19 +1026,50 @@ pub fn mkdir_all(path string) {
 	mut p := if path.starts_with(os.path_separator) { os.path_separator } else { '' }
 	for subdir in path.split(os.path_separator) {
 		p += subdir + os.path_separator
-		if !os.dir_exists(p) {
-			os.mkdir(p)
+		if !os.is_dir(p) {
+			os.mkdir(p) or { panic(err) }
 		}
 	}
 }
 
-// TODO use []string.join once ...string becomes "[]string"
 pub fn join(base string, dirs ...string) string {
-	mut path := strings.new_builder(50)
-	path.write(base.trim_right('\\/'))
-	for d in dirs {
-		path.write(os.path_separator)
-		path.write(d)
-	}
-	return path.str()
+	println('use filepath.join')
+	return filepath.join(base, dirs)
 }
+
+// tmpdir returns the path to a folder, that is suitable for storing temporary files
+pub fn tmpdir() string {
+	mut path := os.getenv('TMPDIR')
+	$if linux {
+		if path == '' { path = '/tmp' }
+	}
+	$if macos {
+		/*
+		if path == '' {
+			// TODO untested
+			path = C.NSTemporaryDirectory()
+		}
+        */
+		if path == '' {	path = '/tmp' }
+	}
+	$if windows {
+		if path == '' {
+			// TODO see Qt's implementation?
+			// https://doc.qt.io/qt-5/qdir.html#tempPath
+			// https://github.com/qt/qtbase/blob/e164d61ca8263fc4b46fdd916e1ea77c7dd2b735/src/corelib/io/qfilesystemengine_win.cpp#L1275
+			path = os.getenv('TEMP')
+			if path == '' {	path = os.getenv('TMP')	}
+			if path == '' {	path = 'C:/tmp'	}
+		}
+	}
+	return path
+}
+
+
+pub fn chmod(path string, mode int) {
+	C.chmod(path.str, mode)
+}
+
+pub const (
+  wd_at_startup = getwd()
+)

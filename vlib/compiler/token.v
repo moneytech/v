@@ -4,6 +4,15 @@
 
 module compiler
 
+struct Token {
+	tok      TokenKind  // the token number/enum; for quick comparisons
+	lit      string // literal representation of the token
+	line_nr  int // the line number in the source where the token occured
+	name_idx int // name table index for O(1) lookup
+	pos      int // the position of the token in scanner text
+}
+
+
 enum TokenKind {
 	eof
 	name        // user
@@ -32,6 +41,7 @@ enum TokenKind {
 	amp
 	hash
 	dollar
+	str_dollar
 	left_shift
 	righ_shift
 	//at // @
@@ -62,8 +72,8 @@ enum TokenKind {
 	ge
 	le
 	// comments
-	//line_com
-	//mline_com
+	line_comment
+	mline_comment
 	nl
 	dot
 	dotdot
@@ -71,20 +81,19 @@ enum TokenKind {
 	// keywords
 	keyword_beg
 	key_as
+	key_asm
 	key_assert
 	key_atomic
 	key_break
-	key_case
 	key_const
 	key_continue
-	key_default
 	key_defer
 	key_else
 	key_embed
 	key_enum
 	key_false
 	key_for
-	func
+	key_fn
 	key_global
 	key_go
 	key_goto
@@ -110,6 +119,7 @@ enum TokenKind {
 	key_union
 	key_pub
 	key_static
+	key_unsafe
 	keyword_end
 }
 
@@ -119,7 +129,7 @@ fn build_keys() map[string]int {
 	mut res := map[string]int
 	for t := int(TokenKind.keyword_beg) + 1; t < int(TokenKind.keyword_end); t++ {
 		key := TokenStr[t]
-		res[key] = int(t)
+		res[key] = t
 	}
 	return res
 }
@@ -184,14 +194,17 @@ fn build_token_str() []string {
 	s[TokenKind.question] = '?'
 	s[TokenKind.left_shift] = '<<'
 	s[TokenKind.righ_shift] = '>>'
-	//s[TokenKind.line_com] = '//'
+	s[TokenKind.line_comment] = '// line comment'
+	s[TokenKind.mline_comment] = '/* mline comment */'
 	s[TokenKind.nl] = 'NLL'
 	s[TokenKind.dollar] = '$'
+	s[TokenKind.str_dollar] = '$2'
 	s[TokenKind.key_assert] = 'assert'
 	s[TokenKind.key_struct] = 'struct'
 	s[TokenKind.key_if] = 'if'
 	//s[TokenKind.key_it] = 'it'
 	s[TokenKind.key_else] = 'else'
+	s[TokenKind.key_asm] = 'asm'
 	s[TokenKind.key_return] = 'return'
 	s[TokenKind.key_module] = 'module'
 	s[TokenKind.key_sizeof] = 'sizeof'
@@ -202,16 +215,15 @@ fn build_token_str() []string {
 	s[TokenKind.key_type] = 'type'
 	s[TokenKind.key_for] = 'for'
 	s[TokenKind.key_switch] = 'switch'
-	s[TokenKind.key_case] = 'case'
-	s[TokenKind.func] = 'fn'
+	s[TokenKind.key_fn] = 'fn'
 	s[TokenKind.key_true] = 'true'
 	s[TokenKind.key_false] = 'false'
 	s[TokenKind.key_continue] = 'continue'
 	s[TokenKind.key_break] = 'break'
 	s[TokenKind.key_import] = 'import'
 	s[TokenKind.key_embed] = 'embed'
+	s[TokenKind.key_unsafe] = 'unsafe'
 	//Tokens[key_typeof] = 'typeof'
-	s[TokenKind.key_default] = 'default'
 	s[TokenKind.key_enum] = 'enum'
 	s[TokenKind.key_interface] = 'interface'
 	s[TokenKind.key_pub] = 'pub'
@@ -250,23 +262,19 @@ fn (t TokenKind) str() string {
 }
 
 fn (t TokenKind) is_decl() bool {
-	// TODO i
-	//return t in [.key_enum, .key_interface, .func, .typ, .key_const,
-		//.key_import_const, .key_struct, .key_pub, .eof]
-	return t == .key_enum || t == .key_interface || t == .func ||
-	t == .key_struct || t == .key_type ||
-	t == .key_const || t == .key_import_const || t == .key_pub || t == .eof
+	return t in [.key_enum, .key_interface, .key_fn,
+		.key_struct ,.key_type,	.key_const,  .key_import_const, .key_pub, .eof]
 }
 
 const (
 	AssignTokens = [
-		TokenKind.assign, TokenKind.plus_assign, TokenKind.minus_assign,
-		TokenKind.mult_assign, TokenKind.div_assign, TokenKind.xor_assign,
-		TokenKind.mod_assign,
-		TokenKind.or_assign, TokenKind.and_assign, TokenKind.righ_shift_assign,
-		TokenKind.left_shift_assign
+		TokenKind.assign, .plus_assign, .minus_assign,
+		.mult_assign, .div_assign, .xor_assign,
+		.mod_assign,
+		.or_assign, .and_assign, .righ_shift_assign,
+		.left_shift_assign
 	]
-	
+
 )
 
 fn (t TokenKind) is_assign() bool {
@@ -280,5 +288,22 @@ fn (t []TokenKind) contains(val TokenKind) bool {
 		}
 	}
 	return false
+}
+
+fn (t Token) str() string {
+	if t.tok == .number {
+		return t.lit
+
+	}
+	if t.tok == .chartoken {
+		return '`$t.lit`'
+	}
+	if t.tok == .str {
+		return "'$t.lit'"
+	}
+	if t.tok < .plus {
+		return t.lit // string, number etc
+	}
+	return t.tok.str()
 }
 

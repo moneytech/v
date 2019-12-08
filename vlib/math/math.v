@@ -6,6 +6,36 @@ module math
 
 #include <math.h>
 
+fn C.acos(x f64) f64
+fn C.asin(x f64) f64
+fn C.atan(x f64) f64
+fn C.atan2(y f64, x f64) f64
+fn C.cbrt(x f64) f64
+fn C.ceil(x f64) f64
+fn C.cos(x f64) f64
+fn C.cosh(x f64) f64
+fn C.erf(x f64) f64
+fn C.erfc(x f64) f64
+fn C.exp(x f64) f64
+fn C.exp2(x f64) f64
+fn C.floor(x f64) f64
+fn C.fmod(x f64, y f64) f64
+fn C.hypot(x f64, y f64) f64
+fn C.log(x f64) f64
+fn C.log2(x f64) f64
+fn C.log10(x f64) f64
+fn C.lgamma(x f64) f64
+fn C.pow(x f64, y f64) f64
+fn C.round(x f64) f64
+fn C.sin(x f64) f64
+fn C.sinh(x f64) f64
+fn C.sqrt(x f64) f64
+fn C.tgamma(x f64) f64
+fn C.tan(x f64) f64
+fn C.tanh(x f64) f64
+fn C.trunc(x f64) f64
+
+
 // NOTE
 // When adding a new function, please make sure it's in the right place.
 // All functions are sorted alphabetically.
@@ -17,8 +47,6 @@ pub fn abs(a f64) f64 {
 	}
 	return a
 }
-
-fn C.acos(a f64) f64
 
 // acos calculates inverse cosine (arccosine).
 pub fn acos(a f64) f64 {
@@ -45,8 +73,8 @@ pub fn cbrt(a f64) f64 {
 	return C.cbrt(a)
 }
 
-// ceil returns the nearest integer greater or equal to the provided value.
-pub fn ceil(a f64) int {
+// ceil returns the nearest f64 greater or equal to the provided value.
+pub fn ceil(a f64) f64 {
 	return C.ceil(a)
 }
 
@@ -72,6 +100,9 @@ pub fn exp(a f64) f64 {
 
 // digits returns an array of the digits of n in the given base.
 pub fn digits(_n, base int) []int {
+	if base < 2 {
+		panic('digits: Cannot find digits of n with base $base')
+	}
 	mut n := _n
 	mut sign := 1
 	if n < 0 {
@@ -102,51 +133,22 @@ pub fn exp2(a f64) f64 {
 }
 
 // factorial calculates the factorial of the provided value.
-// TODO bring back once multiple value functions are implemented
-/*
-fn recursive_product( n int, current_number_ptr &int) int{
-    mut m := n / 2
-    if (m == 0){
-        return *current_number_ptr += 2
-    }
-    if (n == 2){
-        return (*current_number_ptr += 2) * (*current_number_ptr += 2)
-    }
-    return recursive_product((n - m), *current_number_ptr) * recursive_product(m, *current_number_ptr)
+pub fn factorial(n f64) f64 {
+	// For a large postive argument (n >= factorials.len) return max_f64
+
+	if n >= factorials.len {
+			return max_f64
+	}
+
+	// Otherwise return n!.
+	if n == f64(i64(n)) && n >= 0.0 {
+		return factorials[i64(n)]
+	}
+
+	return gamma(n + 1.0)
 }
 
-pub fn factorial(n int) i64 {
-    if n < 0 {
-        panic('factorial: Cannot find factorial of negative number')
-    }
-    if n < 2 {
-        return i64(1)
-    }
-    mut r := 1
-    mut p := 1
-    mut current_number := 1
-    mut h := 0
-    mut shift := 0
-    mut high := 1
-    mut len := high
-    mut log2n := int(floor(log2(n)))
-    for ;h != n; {
-        shift += h
-        h = n >> log2n
-        log2n -= 1
-        len = high
-        high = (h - 1) | 1
-        len = (high - len)/2
-        if (len > 0){
-            p *= recursive_product(len, &current_number)
-            r *= p
-        }
-    }
-    return i64((r << shift))
-}
-*/
-
-// floor returns the nearest integer lower or equal of the provided value.
+// floor returns the nearest f64 lower or equal of the provided value.
 pub fn floor(a f64) f64 {
 	return C.floor(a)
 }

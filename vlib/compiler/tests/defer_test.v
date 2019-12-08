@@ -16,12 +16,12 @@ fn test_defer() {
 }
 
 fn set_num(i int, n mut Num) {
-	defer { n.val+=1 }
+	defer { n.val++ }
 	println("Hi")
 	if i < 5 {
 		return
 	} else {
-		n.val+=1
+		n.val++
 	}
 }
 
@@ -46,6 +46,8 @@ fn test_defer_early_exit() {
 
 fn test_defer_option() {
 	mut ok := Num{0}
-	set_num_opt(mut ok)
+	set_num_opt(mut ok) or {
+		assert false
+	}
 	assert ok.val == 1
 }

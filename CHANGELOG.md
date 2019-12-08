@@ -1,3 +1,89 @@
+## V 0.1.23
+*30 Nov 2019*
+
+The last release before 0.2.
+
+- [Direct x64 machine code generation](https://github.com/vlang/v/issues/2849). Hello world being built in 3 milliseconds.
+- Bare metal support via the `-freestanding` flag, allowing to build programs without linking to libc.
+- Prebuilt V packages for Linux, macOS, and Windows.
+- `string.index()` now returns `?int` instead of `int/-1`.
+- Lots of fixes in Generics.
+- vweb framework for developing web applications is back.
+- Vorum, the forum/blogging software written in V/vweb, can now be compiled and has been added to CI.
+- REPL, `v up` have been split up into separate applications to keep the core V compiler small.
+- V now enforces short enum syntax (`.green` instead of `Color.green`) when it's enough.
+- V UI for macOS.
+- Interfaces have been rewritten. `[]interface` support.
+- `os.cp()` for copying files and directores.
+- Additional compile-time flags: `$if clang, msvc, mingw, x32, x64, big_endian, little_endian {`.
+- All C functions now have to be declared, all missing C functions have been defined.
+- Global variables (only with the `--enable-globals` flag) for low level applications like kernels and drivers.
+- Nothing can be cast to bool (previously code like `if bool(1) {` worked.
+- `<<` and `>>` now work with all integer types.
+- V detects Cygwin and shows an error. (V supports Windows natively)
+- Improved type checking of some operators (`%, |, &` etc).
+- Windows 7 support.
+- `println(true)` now prints `true` instead of `1`.
+- `os.exec()` now uses `CreateProcess` on Windows.
+- fast.vlang.io website for monitoring the performance of V after every commit.
+- On Windows Visual Studio is now used automatically if GCC is not installed.
+- vfmt!
+- Lots of cleaning up in the compiler code.
+- Multi-level pointers in unsafe code (`****int`).
+- MSVC backtrace.
+- `$if os {` blocks are now skipped on a different OS.
+- C string literals (`c'hello'`).
+- AlpineLinux/musl fixes + added to CI.
+- Inline assembly.
+- Clipboard module (Windows, macOS, X).
+- `foo()?` syntax for error propagation.
+- Docs have been migrated from HTML to `doc/docs.md`.
+- `eventbus` module.
+- Haiku OS support.
+- `malloc/free` on bare metal.
+- `utf8` helper functions (`to_lower()`, `to_upper()`, etc).
+- Optimization of `for c in str {`.
+- `string/array.left/right/slice/substr` were removed (`[a..b]` slicing syntax should be used instead).
+
+
+
+
+
+## V 0.1.22
+*28 Oct 2019*
+
+- Generic functions (`fn foo<T>(bar T) T {`) with varargs support.
+- `array[start..end]` and `string[start..end]` slicing syntax.
+- Optimized `array.filter()` and `array.map()`.
+- `sqlite` module.
+- Cached modules for faster compilation.
+- Dramatic compilation optimizations: [V now compiles itself in
+0.10 - 0.30 seconds](https://github.com/vlang/v/wiki/The-V-language-now-compiles-itself-in-0.09-seconds).
+- V scripts (simpler and cross-platform alternative to Bash).
+- Infinite multi-dimensional arrays (`[][][]int`).
+- `unsafe`.
+- `[deprecated]` attribute.
+- `[if]` function attributes for compile time function exclusion
+for performance.
+- `switch` has been completely removed from the language and replaced by
+`match` everywhere.
+- `pub struct` and `pub const`, previously all structs and consts were public
+by default.
+- `musl` support (V can now run on, for example, Alpine Linux).
+- Module header generation. V now supports closed source modules, which are still
+used in some industries.
+- Constants were added to typo suggestions.
+- `color in [.green, .red, .blue]` now works without specifying `Color.green`.
+- V compiler is now a module that can be used by other programs.
+- Backtraces now have source lines on Linux.
+- `runtime.nr_cpus()`.
+- `fn init()` for module initialization.
+- `a in [1, 2, 3]` optimization: no array gets allocated.
+- Raw strings: `s := r'hello\nworld'`.
+- `if a := func() { }` syntax for handling optionals.
+- f32/f64 comparison now uses machine epsilon by default.
+
+
 ## V 0.1.21
 *30 Sep 2019*
 

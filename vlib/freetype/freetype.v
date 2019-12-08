@@ -34,6 +34,10 @@ import (
 #include "ft2build.h"
 #include FT_FREETYPE_H
 
+fn C.FT_Init_FreeType() voidptr
+fn C.FT_New_Face() voidptr
+fn C.FT_Set_Pixel_Sizes()
+
 
 
 const (
@@ -52,7 +56,7 @@ struct C.FT_Library {
 	_z int
 }
 
-struct Context {
+pub struct FreeType {
 	shader    gl.Shader
 	// use_ortho bool
 	width     int
@@ -80,7 +84,7 @@ struct C.Bitmap {
 struct C.Advance {
 	x int
 }
-	
+
 struct C.Glyph {
 	bitmap Bitmap
 	bitmap_left int
@@ -130,14 +134,14 @@ fn ft_load_char(face C.FT_Face, code i64) Character {
 	}
 }
 
-pub fn new_context(cfg gg.Cfg) &Context {
+pub fn new_context(cfg gg.Cfg) &FreeType {
 	scale := cfg.scale
 	// Can only have text in ortho mode
 	if !cfg.use_ortho {
-		return &Context{}
+		return &FreeType{}
 	}
-	mut width := cfg.width * scale
-	mut height := cfg.height * scale
+	width := cfg.width * scale
+	height := cfg.height * scale
 	font_size := cfg.font_size * scale
 	// exit('fs=$font_size')
 	// if false {
@@ -169,12 +173,12 @@ pub fn new_context(cfg gg.Cfg) &Context {
 	if font_path == '' {
 		font_path = 'RobotoMono-Regular.ttf'
 	}
-	if !os.file_exists(font_path) {
+	if !os.exists(font_path) {
 		exe_path := os.executable()
 		exe_dir := os.basedir(exe_path)
 		font_path = '$exe_dir/$font_path'
 	}
-	if !os.file_exists(font_path) {
+	if !os.exists(font_path) {
 		println('failed to load $font_path')
 		return 0
 	}
@@ -191,7 +195,7 @@ pub fn new_context(cfg gg.Cfg) &Context {
 	C.glPixelStorei(C.GL_UNPACK_ALIGNMENT, 1)
 	// Gen texture
 	// Load first 128 characters of ASCII set
-	mut chars := []Character{}
+	mut chars := []Character
 	for c := 0; c < 128; c++ {
 		mut ch := ft_load_char(face, i64(c))
 		// s := utf32_to_str(uint(0x043f))
@@ -217,7 +221,7 @@ pub fn new_context(cfg gg.Cfg) &Context {
 	// # glVertexAttribPointer(0, 4, GL_FLOAT,false, 4 * sizeof(GLf32), 0);
 	// gl.bind_buffer(GL_ARRAY_BUFFER, uint(0))
 	// # glBindVertexArray(0);
-	mut ctx := &Context {
+	ctx := &FreeType {
 		shader: shader
 		width: width
 		height: height
@@ -234,7 +238,7 @@ pub fn new_context(cfg gg.Cfg) &Context {
 /*
 // A dirty hack to implement rendering of cyrillic letters.
 // All UTF-8 must be supported. update: no longer needed
-fn (ctx mut Context) init_utf8_runes() {
+fn (ctx mut FreeType) init_utf8_runes() {
 	s := '≈≠⩽⩾йцукенгшщзхъфывапролджэячсмитьбюЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ'
 	print('init utf8 runes: ')
 	//println(s)
@@ -249,17 +253,17 @@ fn (ctx mut Context) init_utf8_runes() {
 }
 */
 
-pub fn (ctx mut Context) draw_text(_x, _y int, text string, cfg gx.TextCfg) {
+pub fn (ctx mut FreeType) draw_text(_x, _y int, text string, cfg gx.TextCfg) {
 	//utext := text.ustring_tmp()
 	utext := text.ustring()
 	ctx.private_draw_text(_x, _y, utext, cfg)
 }
 
-fn (ctx mut Context) draw_text_fast(_x, _y int, text ustring, cfg gx.TextCfg) {
+fn (ctx mut FreeType) draw_text_fast(_x, _y int, text ustring, cfg gx.TextCfg) {
 	ctx.private_draw_text(_x, _y, text, cfg)
 }
 
-fn (ctx mut Context) private_draw_text(_x, _y int, utext ustring, cfg gx.TextCfg) {
+fn (ctx mut FreeType) private_draw_text(_x, _y int, utext ustring, cfg gx.TextCfg) {
 	/*
 	if utext.s.contains('on_seg') {
 		println('\nat(0)')
@@ -357,7 +361,7 @@ fn (ctx mut Context) private_draw_text(_x, _y int, utext ustring, cfg gx.TextCfg
 	C.glBindTexture(C.GL_TEXTURE_2D, 0)
 }
 
-pub fn (ctx mut Context) draw_text_def(x, y int, text string) {
+pub fn (ctx mut FreeType) draw_text_def(x, y int, text string) {
 	cfg := gx.TextCfg {
 		color: gx.Black,
 		size: DEFAULT_FONT_SIZE,

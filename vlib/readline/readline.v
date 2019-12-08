@@ -27,7 +27,7 @@ struct Winsize {
   ws_ypixel u16
 }
 
-struct Readline {
+pub struct Readline {
 mut:
   is_raw bool
   orig_termios Termios // Linux
@@ -36,6 +36,7 @@ mut:
   overwrite bool
   cursor_row_offset int
   prompt string
+  prompt_offset int
   previous_lines []ustring
   search_index int
   is_tty bool

@@ -1,14 +1,17 @@
+<img width="80" src="https://raw.githubusercontent.com/donnisnoni95/v-logo/master/dist/v-logo.svg?sanitize=true">
+
 # The V Programming Language
 
 [![Build Status](https://github.com/vlang/v/workflows/CI/badge.svg)](https://github.com/vlang/v/commits/master)
-[![Build Status](https://travis-ci.org/vlang/v.svg?branch=master)](https://travis-ci.org/vlang/v)
 <a href='https://patreon.com/vlang'><img src='https://img.shields.io/endpoint.svg?url=https%3A%2F%2Fshieldsio-patreon.herokuapp.com%2Fvlang%2Fpledges&style=for-the-badge' height='20'></a>
 
 https://vlang.io
 
 Documentation: [vlang.io/docs](https://vlang.io/docs)
 
-Changelog: [github.com/vlang/v/blob/master/CHANGELOG.md](https://github.com/vlang/v/blob/master/CHANGELOG.md) 
+Changelog: [github.com/vlang/v/blob/master/CHANGELOG.md](https://github.com/vlang/v/blob/master/CHANGELOG.md)
+
+Speed Test: [fast.vlang.io](https://fast.vlang.io/) (monitors compilation speed for each commit to verify there are no speed regressions)
 
 Twitter: [twitter.com/v_language](https://twitter.com/v_language)
 
@@ -32,12 +35,11 @@ Installing V: [github.com/vlang/v#installing-v-from-source](https://github.com/v
 - Built-in ORM
 - C and JavaScript backends
 
-V 1.0 release is planned for December 2019. Right now V is in an alpha stage.
+A stable 0.2 release is planned for early December 2019. Right now V is in an alpha stage.
 
 ## Installing V from source
 
 ### Linux, macOS, Windows, *BSD, Solaris, WSL, Android, Raspbian
-
 
 ```bash
 git clone https://github.com/vlang/v
@@ -47,12 +49,13 @@ make
 
 That's it! Now you have a V executable at `[path to V repo]/v`. `[path to V repo]` can be anywhere.
 
-V is being constantly updated. To update V, simply run
+(On Windows `make` means running `make.bat`, so make sure you use `cmd.exe`.)
+
+V is being constantly updated. To update V, simply run:
 
 ```
 v up
 ```
-
 
 ### C compiler
 
@@ -64,7 +67,6 @@ Otherwise, follow these instructions:
 
 [github.com/vlang/v/wiki/Installing-a-C-compiler-on-Windows](https://github.com/vlang/v/wiki/Installing-a-C-compiler-on-Windows)
 
-
 ### Symlinking
 
 You can create a `/usr/local/bin/v` symlink so that V is globally available:
@@ -72,7 +74,6 @@ You can create a `/usr/local/bin/v` symlink so that V is globally available:
 ```bash
 sudo ./v symlink
 ```
-
 
 ### Docker
 
@@ -84,7 +85,14 @@ docker run --rm -it vlang:latest
 v
 ```
 
-
+### Docker with Alpine/musl:
+```bash
+git clone https://github.com/vlang/v
+cd v
+docker build -t vlang --file=Dockerfile.alpine .
+docker run --rm -it vlang:latest
+/usr/local/v/v
+```
 
 ### Testing and running the examples
 
@@ -103,7 +111,6 @@ Use Ctrl-C or `exit` to exit
 hello world
 >>>
 ```
-
 
 ```bash
 cd examples
@@ -172,5 +179,3 @@ Code structure:
 https://github.com/vlang/v/blob/master/CONTRIBUTING.md
 
 If you introduce a breaking change and rebuild V, you will no longer be able to use V to build itself. So it's a good idea to make a backup copy of a working compiler executable.
-
-

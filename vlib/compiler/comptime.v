@@ -23,6 +23,9 @@ fn (p mut Parser) comp_time() {
 		p.fspace()
 		if name in supported_platforms {
 			ifdef_name := os_name_to_ifdef(name)
+			if name == 'mac' {
+				p.warn('use `macos` instead of `mac`')
+			}
 			if not {
 				p.genln('#ifndef $ifdef_name')
 			}
@@ -31,27 +34,32 @@ fn (p mut Parser) comp_time() {
 			}
 			p.check(.lcbr)
 			os := os_from_string(name)
-			if false && p.fileis('runtime.v') && os != p.os {
+			if ((!not && os != p.os) || (not && os == p.os)) &&
+				!p.pref.output_cross_c
+			{
 				// `$if os {` for a different target, skip everything inside
 				// to avoid compilation errors (like including <windows.h>
 				// on non-Windows systems)
 				mut stack := 1
 				for {
+					if p.tok == .key_return {
+						p.returns = true
+					}
 					if p.tok == .lcbr {
 						stack++
 					} else if p.tok == .rcbr {
 						stack--
-					}	
+					}
 					if p.tok == .eof {
 						break
-					}	
+					}
 					if stack <= 0 && p.tok == .rcbr {
 						//p.warn('exiting $stack')
 						p.next()
 						break
-					}	
+					}
 					p.next()
-				}	
+				}
 			}	 else {
 				p.statements_no_rcbr()
 			}
@@ -59,19 +67,35 @@ fn (p mut Parser) comp_time() {
 				p.genln('#endif')
 			}
 		}
+		else if name == 'x64' {
+			p.comptime_if_block('TARGET_IS_64BIT')
+		}
+		else if name == 'x32' {
+			p.comptime_if_block('TARGET_IS_32BIT')
+		}
+		else if name == 'big_endian' {
+			p.comptime_if_block('TARGET_ORDER_IS_BIG')
+		}
+		else if name == 'little_endian' {
+			p.comptime_if_block('TARGET_ORDER_IS_LITTLE')
+		}
 		else if name == 'debug' {
-			p.genln('#ifdef VDEBUG')
-			p.check(.lcbr)
-			p.statements_no_rcbr()
-			p.genln('#endif')
+			p.comptime_if_block('VDEBUG')
 		}
 		else if name == 'tinyc' {
-			p.genln('#ifdef __TINYC__')
-			p.check(.lcbr)
-			p.statements_no_rcbr()
-			if ! (p.tok == .dollar && p.peek() == .key_else) {
-				p.genln('#endif')
-			}
+			p.comptime_if_block('__TINYC__')
+		}
+		else if name == 'glibc' {
+			p.comptime_if_block('__GLIBC__')
+		}
+		else if name == 'mingw' {
+			p.comptime_if_block('__MINGW32__')
+		}
+		else if name == 'msvc' {
+			p.comptime_if_block('_MSC_VER')
+		}
+		else if name == 'clang' {
+			p.comptime_if_block('__clang__')
 		}
 		else {
 			println('Supported platforms:')
@@ -82,8 +106,10 @@ fn (p mut Parser) comp_time() {
 		p.returns = false
 		//p.gen('/* returns $p.returns */')
 		if p.tok == .dollar && p.peek() == .key_else {
+			p.fspace()
 			p.next()
 			p.next()
+			p.fspace() // spaces before and after $else
 			p.check(.lcbr)
 			p.genln('#else')
 			p.statements_no_rcbr()
@@ -91,6 +117,8 @@ fn (p mut Parser) comp_time() {
 			else_returns := p.returns
 			p.returns = if_returns && else_returns
 			//p.gen('/* returns $p.returns */')
+		} else if p.tok == .key_else {
+			p.error('use `$' + 'else` instead of `else` in comptime if statements')
 		}
 	}
 	else if p.tok == .key_for {
@@ -111,10 +139,9 @@ fn (p mut Parser) comp_time() {
 		p.check(.dollar)
 		p.check(.name)
 		p.check(.assign)
-		p.cgen.start_tmp()
-		p.bool_expression()
-		val := p.cgen.end_tmp()
-		println(val)
+		_, val := p.tmp_expr()
+		//p.bool_expression()
+		//val := p.cgen.end_tmp()
 		p.check(.rcbr)
 		// }
 	}
@@ -126,12 +153,12 @@ fn (p mut Parser) comp_time() {
 		if p.pref.is_debug {
 			println('compiling tmpl $path')
 		}
-		if !os.file_exists(path) {
+		if !os.exists(path) {
 			// Can't find the template file in current directory,
 			// try looking next to the vweb program, in case it's run with
 			// v path/to/vweb_app.v
 			path = os.dir(p.scanner.file_path) + '/' + path
-			if !os.file_exists(path) {
+			if !os.exists(path) {
 				p.error('vweb HTML template "$path" not found')
 			}
 		}
@@ -141,32 +168,17 @@ fn (p mut Parser) comp_time() {
 		p.check(.lpar)
 		p.check(.rpar)
 		v_code := tmpl.compile_template(path)
-		if os.file_exists('.vwebtmpl.v') {
-			os.rm('.vwebtmpl.v')
+		is_strings_imorted := p.import_table.known_import('strings')
+		if !is_strings_imorted {
+			p.register_import('strings', 0) // used by v_code
 		}
-		os.write_file('.vwebtmpl.v', v_code.clone()) // TODO don't need clone, compiler bug
-		p.genln('')
-		// Parse the function and embed resulting C code in current function so that
-		// all variables are available.
-		pos := p.cgen.lines.len - 1
-		mut pp := p.v.new_parser_from_file('.vwebtmpl.v')
-		if !p.pref.is_debug {
-			os.rm('.vwebtmpl.v')
-		}
-		pp.is_vweb = true
-		pp.set_current_fn( p.cur_fn ) // give access too all variables in current function
-		pp.parse(.main)
-		pp.v.add_parser(pp)
-		tmpl_fn_body := p.cgen.lines.slice(pos + 2, p.cgen.lines.len).join('\n').clone()
-		end_pos := tmpl_fn_body.last_index('Builder_str( sb )')  + 19 // TODO
-		p.cgen.lines = p.cgen.lines.left(pos)
+		p.import_table.register_used_import('strings')
 		p.genln('/////////////////// tmpl start')
-		p.genln(tmpl_fn_body.left(end_pos))
+		p.statements_from_text(v_code, false)
 		p.genln('/////////////////// tmpl end')
-		// `app.vweb.html(index_view())`
 		receiver := p.cur_fn.args[0]
-		dot := if receiver.is_mut { '->' } else { '.' }
-		p.genln('vweb__Context_html($receiver.name $dot vweb, tmpl_res)')
+		dot := if receiver.is_mut || receiver.ptr || receiver.typ.ends_with('*') { '->' } else { '.' }
+		p.genln('vweb__Context_html($receiver.name /*!*/$dot vweb, tmpl_res)')
 	}
 	else {
 		p.error('bad comptime expr')
@@ -180,19 +192,28 @@ fn (p mut Parser) chash() {
 	p.next()
 	if hash.starts_with('flag ') {
 		if p.first_pass() {
-			mut flag := hash.right(5)
+			mut flag := hash[5..]
 			// expand `@VROOT` `@VMOD` to absolute path
 			flag = flag.replace('@VROOT', p.vroot)
+			flag = flag.replace('@VPATH', p.pref.vpath)
+			flag = flag.replace('@VLIB_PATH', p.pref.vlib_path)
 			flag = flag.replace('@VMOD', v_modules_path)
 			//p.log('adding flag "$flag"')
 			_ = p.table.parse_cflag(flag, p.mod) or {
 				p.error_with_token_index(err, p.cur_tok_index()-1)
+				return
 			}
 		}
 		return
 	}
 	if hash.starts_with('include') {
 		if p.first_pass() && !p.is_vh {
+			/*
+			if !p.pref.building_v && !p.fileis('vlib') {
+				p.warn('C #includes will soon be removed from the language' +
+				'\ndefine the C structs and functions in V')
+			}
+			*/
 			if p.file_pcguard.len != 0 {
 				//println('p: $p.file_platform $p.file_pcguard')
 				p.cgen.includes << '$p.file_pcguard\n#$hash\n#endif'
@@ -204,31 +225,33 @@ fn (p mut Parser) chash() {
 	}
 	// TODO remove after ui_mac.m is removed
 	else if hash.contains('embed') {
-		pos := hash.index('embed') + 5
-		file := hash.right(pos)
-		if p.pref.build_mode != .default_mode {
+		pos := hash.index('embed') or { return }
+		file := hash[pos+5..]
+		//if p.pref.build_mode != .default_mode {
 			p.genln('#include $file')
-		}
+		//}
 	}
 	else if hash.contains('define') {
 		// Move defines on top
-		p.cgen.includes << '#$hash'
+		if p.first_pass() {
+			p.cgen.includes << '#$hash'
+		}
 	}
-	// Don't parse a non-JS V file (`#-js` flag)
+	//// Don't parse a non-JS V file (`#-js` flag)
 	else if hash == '-js'  {
 		$if js {
 			for p.tok != .eof {
 				p.next()
-			}	
+			}
 		} $else {
 			p.next()
-		}	
+		}
 	}
 	else {
 		$if !js {
 			if !p.can_chash {
 				println('hash="$hash"')
-				println(hash.starts_with('include'))
+				if hash.starts_with('include') { println("include") } else {}
 				p.error('bad token `#` (embedding C code is no longer supported)')
 			}
 		}
@@ -241,16 +264,23 @@ fn (p mut Parser) comptime_method_call(typ Type) {
 	p.cgen.cur_line = ''
 	p.check(.dollar)
 	var := p.check_name()
-	for i, method in typ.methods {
+	mut j := 0
+	for method in typ.methods {
 		if method.typ != 'void' {
+
 			continue
 		}
 		receiver := method.args[0]
-		amp := if receiver.is_mut { '&' } else { '' }
-		if i > 0 {
+		if !p.expr_var.ptr {
+			p.error('`$p.expr_var.name` needs to be a reference')
+		}
+		amp := if receiver.is_mut && !p.expr_var.ptr { '&' } else { '' }
+		if j > 0 {
 			p.gen(' else ')
 		}
-		p.gen('if ( string_eq($var, _STR("$method.name")) ) ${typ.name}_$method.name($amp $p.expr_var.name);')
+		p.genln('if ( string_eq($var, _STR("$method.name")) ) ' +
+			'${typ.name}_$method.name($amp $p.expr_var.name);')
+		j++
 	}
 	p.check(.lpar)
 	p.check(.rpar)
@@ -263,6 +293,9 @@ fn (p mut Parser) comptime_method_call(typ Type) {
 }
 
 fn (p mut Parser) gen_array_str(typ Type) {
+	if typ.has_method('str') {
+		return
+	}
 	p.add_method(typ.name, Fn{
 		name: 'str'
 		typ: 'string'
@@ -271,7 +304,7 @@ fn (p mut Parser) gen_array_str(typ Type) {
 		is_public: true
 		receiver_typ: typ.name
 	})
-	elm_type := typ.name.right(6)
+	elm_type := typ.name[6..]
 	elm_type2 := p.table.find_type(elm_type)
 	is_array := elm_type.starts_with('array_')
 	if is_array {
@@ -307,7 +340,7 @@ fn (p mut Parser) gen_struct_str(typ Type) {
 		is_public: true
 		receiver_typ: typ.name
 	})
-	
+
 	mut sb := strings.new_builder(typ.fields.len * 20)
 	sb.writeln('fn (a $typ.name) str() string {\nreturn')
 	sb.writeln("'{")
@@ -319,7 +352,32 @@ fn (p mut Parser) gen_struct_str(typ Type) {
 	p.v.vgen_buf.writeln(sb.str())
 	// Need to manually add the definition to `fns` so that it stays
 	// at the top of the file.
-	// This function will get parsee by V after the main pass.
+	// This function will get parsed by V after the main pass.
+	p.cgen.fns << 'string ${typ.name}_str();'
+}
+
+fn (p mut Parser) gen_varg_str(typ Type) {
+	elm_type := typ.name[5..]
+	elm_type2 := p.table.find_type(elm_type)
+	is_array := elm_type.starts_with('array_')
+	if is_array {
+		p.gen_array_str(elm_type2)
+	} else if elm_type2.cat == .struct_ {
+		p.gen_struct_str(elm_type2)
+	}
+	p.v.vgen_buf.writeln('
+fn (a $typ.name) str() string {
+	mut sb := strings.new_builder(a.len * 3)
+	sb.write("[")
+	for i, elm in a {
+		sb.write(elm.str())
+		if i < a.len - 1 {
+			sb.write(", ")
+		}
+	}
+	sb.write("]")
+	return sb.str()
+}')
 	p.cgen.fns << 'string ${typ.name}_str();'
 }
 
@@ -328,7 +386,7 @@ fn (p mut Parser) gen_array_filter(str_typ string, method_ph int) {
 		// V
 		a := [1,2,3,4]
 		b := a.filter(it % 2 == 0)
-		
+
 		// C
 		array_int a = ...;
 		array_int tmp2 = new_array(0, 4, 4);
@@ -338,7 +396,7 @@ fn (p mut Parser) gen_array_filter(str_typ string, method_ph int) {
 		}
 		array_int b = tmp2;
 	*/
-	val_type:=str_typ.right(6)
+	val_type:=str_typ[6..]
 	p.open_scope()
 	p.register_var(Var{
 		name: 'it'
@@ -361,4 +419,53 @@ fn (p mut Parser) gen_array_filter(str_typ string, method_ph int) {
 	p.gen(tmp) // TODO why does this `gen()` work?
 	p.check(.rpar)
 	p.close_scope()
+}
+
+fn (p mut Parser) gen_array_map(str_typ string, method_ph int) string {
+	/*
+		// V
+		a := [1,2,3,4]
+		b := a.map(it * 2)
+
+		// C
+		array_int a = ...;
+		array_int tmp2 = new_array(0, 4, 4);
+		for (int i = 0; i < a.len; i++) {
+			int it = ((int*)a.data)[i];
+			_PUSH(tmp2, it * 2, tmp3, int)
+		}
+		array_int b = tmp2;
+	*/
+	val_type:=str_typ[6..]
+	p.open_scope()
+	p.register_var(Var{
+		name: 'it'
+		typ: val_type
+	})
+	p.next()
+	p.check(.lpar)
+	p.cgen.resetln('')
+	tmp := p.get_tmp()
+	tmp_elm := p.get_tmp()
+	a := p.expr_var.name
+	map_type, expr := p.tmp_expr()
+	p.cgen.set_placeholder(method_ph,'\narray $tmp = new_array(0, $a .len, ' +
+		'sizeof($map_type));\n')
+	p.genln('for (int i = 0; i < ${a}.len; i++) {')
+	p.genln('$val_type it = (($val_type*)${a}.data)[i];')
+	p.genln('_PUSH(&$tmp, $expr, $tmp_elm, $map_type)')
+	p.genln('}')
+	p.gen(tmp) // TODO why does this `gen()` work?
+	p.check(.rpar)
+	p.close_scope()
+	return 'array_' + map_type
+}
+
+fn (p mut Parser) comptime_if_block(name string) {
+	p.genln('#ifdef $name')
+	p.check(.lcbr)
+	p.statements_no_rcbr()
+	if ! (p.tok == .dollar && p.peek() == .key_else) {
+		p.genln('#endif')
+	}
 }

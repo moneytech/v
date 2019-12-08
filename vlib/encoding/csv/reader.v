@@ -80,11 +80,11 @@ fn (r mut Reader) read_line() ?string {
 			}
 		}
 	}
-	mut line := r.data.substr(r.row_pos, i)
+	mut line := r.data[r.row_pos..i]
 	r.row_pos = i+1
 	// normalize win line endings (remove extra \r)
 	if !r.is_mac_pre_osx_le && (line.len >= 1 && line[line.len-1] == `\r`) {
-		line = line.left(line.len-1)
+		line = line[..line.len-1]
 	}
 	return line
 }
@@ -113,39 +113,36 @@ fn (r mut Reader) read_record() ?[]string {
 	for {
 		// not quoted
 		if line[0] != `"` {
-			i = line.index(r.delimiter.str())
-			if i == -1 {
+			i = line.index(r.delimiter.str()) or {
 				// last
 				break
 			}
-			fields << line.left(i)
-			line = line.right(i+1)
+			fields << line[..i]
+			line = line[i+1..]
 			continue
 		}
 		// quoted
 		else {
-			line = line.right(1)
-			i = line.index('"')
-			if i != -1 {
-				if i+1 == line.len {
+			line = line[1..]
+			if j := line.index('"') {
+				if j+1 == line.len {
 					// last record
-					fields << line.left(i)
+					fields << line[..j]
 					break
 				}
-				next := line[i+1]
+				next := line[j+1]
 				if next == r.delimiter {
-					fields << line.left(i)
-					line = line.right(i)
+					fields << line[..j]
+					line = line[j..]
 					continue
 				}
 			}
-			line = line.right(1)
+			line = line[1..]
 		}
 		if i <= -1 && fields.len == 0 {
 			return err_invalid_delim
 		}
 	}
-	
 	return fields
 }
 

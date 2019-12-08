@@ -5,6 +5,7 @@
 module compiler
 
 import os
+import strings
 
 struct CGen {
 	out          os.File
@@ -15,16 +16,19 @@ struct CGen {
 	is_user      bool
 mut:
 	lines        []string
+	lines_extra  []string
 	typedefs     []string
 	type_aliases []string
 	includes     []string
 	thread_args  []string
 	consts       []string
+	const_defines []string
 	fns          []string
 	so_fns       []string
 	consts_init  []string
 	pass         Pass
 	nogen           bool
+	prev_tmps    []string
 	tmp_line        string
 	cur_line        string
 	prev_line       string
@@ -100,25 +104,32 @@ fn (g mut CGen) resetln(s string) {
 fn (g mut CGen) save() {
 	s := g.lines.join('\n')
 	g.out.writeln(s)
+	g.out.writeln(g.lines_extra.join('\n'))
 	g.out.close()
 }
 
-fn (g mut CGen) start_tmp() {
-	if g.is_tmp {
-		println(g.tmp_line)
-		println('start_tmp() already started. cur_line="$g.cur_line"')
-		exit(1)
+
+// returns expression's type, and entire expression's string representation)
+fn (p mut Parser) tmp_expr() (string, string) {
+	// former start_tmp()
+	if p.cgen.is_tmp {
+		p.cgen.prev_tmps << p.cgen.tmp_line
 	}
 	// kg.tmp_lines_pos++
-	g.tmp_line = ''
-	g.is_tmp = true
-}
+	p.cgen.tmp_line = ''
+	p.cgen.is_tmp = true
+	//
+	typ := p.bool_expression()
 
-fn (g mut CGen) end_tmp() string {
-	g.is_tmp = false
-	res := g.tmp_line
-	g.tmp_line = ''
-	return res
+	res := p.cgen.tmp_line
+	if p.cgen.prev_tmps.len > 0 {
+		p.cgen.tmp_line = p.cgen.prev_tmps.last()
+		p.cgen.prev_tmps = p.cgen.prev_tmps[0..p.cgen.prev_tmps.len-1]
+	} else {
+		p.cgen.tmp_line = ''
+		p.cgen.is_tmp = false
+	}
+	return typ, res
 }
 
 fn (g &CGen) add_placeholder() int {
@@ -136,12 +147,12 @@ fn (g mut CGen) cut() string {
 	pos := g.cut_pos
 	g.cut_pos = 0
 	if g.is_tmp {
-		res := g.tmp_line.right(pos)
-		g.tmp_line = g.tmp_line.left(pos)
+		res := g.tmp_line[pos..]
+		g.tmp_line = g.tmp_line[..pos]
 		return res
 	}
-	res := g.cur_line.right(pos)
-	g.cur_line = g.cur_line.left(pos)
+	res := g.cur_line[pos..]
+	g.cur_line = g.cur_line[..pos]
 	return res
 }
 
@@ -151,13 +162,13 @@ fn (g mut CGen) set_placeholder(pos int, val string) {
 	}
 	// g.lines.set(pos, val)
 	if g.is_tmp {
-		left := g.tmp_line.left(pos)
-		right := g.tmp_line.right(pos)
+		left := g.tmp_line[..pos]
+		right := g.tmp_line[pos..]
 		g.tmp_line = '${left}${val}${right}'
 		return
 	}
-	left := g.cur_line.left(pos)
-	right := g.cur_line.right(pos)
+	left := g.cur_line[..pos]
+	right := g.cur_line[pos..]
 	g.cur_line = '${left}${val}${right}'
 	// g.genln('')
 }
@@ -165,7 +176,7 @@ fn (g mut CGen) set_placeholder(pos int, val string) {
 fn (g mut CGen) insert_before(val string) {
 	if g.nogen {
 		return
-	}	
+	}
 	prev := g.lines[g.lines.len - 1]
 	g.lines[g.lines.len - 1] = '$prev \n $val \n'
 }
@@ -181,7 +192,7 @@ fn (g mut CGen) register_thread_fn(wrapper_name, wrapper_text, struct_text strin
 }
 
 fn (v &V) prof_counters() string {
-	mut res := []string
+	res := []string
 	// Global fns
 	//for f in c.table.fns {
 		//res << 'double ${c.table.cgen_name(f)}_time;'
@@ -201,7 +212,7 @@ fn (v &V) prof_counters() string {
 }
 
 fn (p &Parser) print_prof_counters() string {
-	mut res := []string
+	res := []string
 	// Global fns
 	//for f in p.table.fns {
 		//counter := '${p.table.cgen_name(f)}_time'
@@ -245,7 +256,7 @@ fn (g mut CGen) add_to_main(s string) {
 
 fn build_thirdparty_obj_file(path string, moduleflags []CFlag) {
 	obj_path := os.realpath(path)
-	if os.file_exists(obj_path) {
+	if os.exists(obj_path) {
 		return
 	}
 	println('$obj_path not found, building it...')
@@ -267,38 +278,56 @@ fn build_thirdparty_obj_file(path string, moduleflags []CFlag) {
 		verror(err)
 		return
 	}
+	if res.exit_code != 0 {
+		println('failed thirdparty object build cmd: $cmd')
+		verror(res.output)
+		return
+	}
 	println(res.output)
 }
 
 fn os_name_to_ifdef(name string) string {
-	switch name {
-		case 'windows': return '_WIN32'
-		case 'mac': return '__APPLE__'
-		case 'linux': return '__linux__'
-		case 'freebsd': return '__FreeBSD__'
-		case 'openbsd': return '__OpenBSD__'
-		case 'netbsd': return '__NetBSD__'
-		case 'dragonfly': return '__DragonFly__'
-		case 'msvc': return '_MSC_VER'
-		case 'android': return '__BIONIC__'
-		case 'js': return '_VJS'
-		case 'solaris': return '__sun'
+	match name {
+		'windows' { return '_WIN32' }
+		'mac' { return '__APPLE__' }
+		'macos' { return '__APPLE__' }
+		'linux' { return '__linux__' }
+		'freebsd' { return '__FreeBSD__' }
+		'openbsd'{  return '__OpenBSD__' }
+		'netbsd'{ return '__NetBSD__' }
+		'dragonfly'{ return '__DragonFly__' }
+		'msvc'{ return '_MSC_VER' }
+		'android'{ return '__BIONIC__' }
+		'js' {return '_VJS' }
+		'solaris'{ return '__sun' }
+		'haiku' { return '__haiku__' }
+		else { verror('bad os ifdef name "$name"') }
 	}
-	verror('bad os ifdef name "$name"')
+	//verror('bad os ifdef name "$name"')
 	return ''
 }
 
 fn platform_postfix_to_ifdefguard(name string) string {
-	switch name {
-		case '.v': return '' // no guard needed
-		case '_win.v': return '#ifdef _WIN32'
-		case '_nix.v': return '#ifndef _WIN32'
-		case '_lin.v': return '#ifdef __linux__'
-		case '_mac.v': return '#ifdef __APPLE__'
-		case '_solaris.v': return '#ifdef __sun'
+	s := match name {
+		'.v'                   { '' }// no guard needed
+		'_win.v', '_windows.v' { '#ifdef _WIN32' }
+		'_nix.v'               { '#ifndef _WIN32' }
+		'_lin.v', '_linux.v'   { '#ifdef __linux__' }
+		'_mac.v', '_darwin.v'  { '#ifdef __APPLE__' }
+		'_bsd.v', '_freebsd.v '{ '#ifdef __FreeBSD__'}
+		'_solaris.v'           { '#ifdef __sun' }
+		'_haiku.v'             { '#ifdef __haiku__' }
+		else {
+
+			//verror('bad platform_postfix "$name"')
+			// TODO
+			''
+		}
 	}
-	verror('bad platform_postfix "$name"')
-	return ''
+	if s == '' {
+		verror('bad platform_postfix "$name"')
+	}
+	return s
 }
 
 // C struct definitions, ordered
@@ -327,7 +356,7 @@ fn (v &V) type_definitions() string {
 			types_to_c(types_sorted, v.table)
 	return res
 }
-	
+
 // sort structs by dependant fields
 fn sort_structs(types []Type) []Type {
 	mut dep_graph := new_dep_graph()
@@ -353,7 +382,10 @@ fn sort_structs(types []Type) []Type {
 	// sort graph
 	dep_graph_sorted := dep_graph.resolve()
 	if !dep_graph_sorted.acyclic {
-		verror('error: cgen.sort_structs() DGNAC.\nplease create a new issue here: https://github.com/vlang/v/issues and tag @joe-conigliaro')
+		verror('cgen.sort_structs(): the following structs form a dependency cycle:\n' +
+			dep_graph_sorted.display_cycles() +
+			'\nyou can solve this by making one or both of the dependant struct fields references, eg: field &MyStruct' +
+			'\nif you feel this is an error, please create a new issue here: https://github.com/vlang/v/issues and tag @joe-conigliaro')
 	}
 	// sort types
 	mut types_sorted := []Type
@@ -367,3 +399,38 @@ fn sort_structs(types []Type) []Type {
 	}
 	return types_sorted
 }
+
+// Generates interface table and interface indexes
+fn (v &V) interface_table() string {
+       mut sb := strings.new_builder(100)
+       for _, t in v.table.typesmap {
+               if t.cat != .interface_ {
+                       continue
+               }
+               mut methods := ''
+              sb.writeln('// NR methods = $t.gen_types.len')
+               for i, gen_type in t.gen_types {
+                       methods += '{'
+                       for j, method in t.methods {
+					       // Cat_speak
+                               methods += '${gen_type}_${method.name}'
+                               if j < t.methods.len - 1 {
+                                       methods += ', '
+                               }
+                       }
+                       methods += '}, '
+                       // Speaker_Cat_index = 0
+                       sb.writeln('int _${t.name}_${gen_type}_index = $i;')
+               }
+              if t.gen_types.len > 0 {
+//              	methods = '{TCCSKIP(0)}'
+//              }
+               sb.writeln('void* (* ${t.name}_name_table[][$t.methods.len]) = ' +
+'{ $methods }; ')
+}
+               continue
+       }
+       return sb.str()
+}
+
+
