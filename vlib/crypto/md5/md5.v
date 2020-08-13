@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
@@ -37,9 +37,9 @@ mut:
 	len u64
 }
 
-fn (d mut Digest) reset() {
-	d.s = [u32(0)].repeat(4)
-	d.x = [byte(0)].repeat(block_size)
+fn (mut d Digest) reset() {
+	d.s = []u32{len:(4)}
+	d.x = []byte{len:(block_size)}
     d.s[0] = u32(init0)
 	d.s[1] = u32(init1)
 	d.s[2] = u32(init2)
@@ -55,7 +55,7 @@ pub fn new() &Digest {
 	return d
 }
 
-pub fn (d mut Digest) write(p_ []byte) int {
+pub fn (mut d Digest) write(p_ []byte) int {
 	mut p := p_
 	nn := p.len
 	d.len += u64(nn)
@@ -98,17 +98,17 @@ pub fn (d &Digest) sum(b_in []byte) []byte {
 	return b_out
 }
 
-pub fn (d mut Digest) checksum() []byte {
+pub fn (mut d Digest) checksum() []byte {
 	// Append 0x80 to the end of the message and then append zeros
 	// until the length is a multiple of 56 bytes. Finally append
 	// 8 bytes representing the message length in bits.
 	//
 	// 1 byte end marker :: 0-63 padding bytes :: 8 byte length
 	// tmp := [1 + 63 + 8]byte{0x80}
-    mut tmp := [byte(0)].repeat(1 + 63 + 8)
+    mut tmp := []byte{len:(1 + 63 + 8)}
 	tmp[0] = 0x80
-	pad := int((55 - int(d.len)) % u64(64)) // calculate number of padding bytes
-	binary.little_endian_put_u64(mut tmp[1+pad..], d.len<<u64(3)) // append length in bits
+	pad := ((55 - d.len) % 64) // calculate number of padding bytes
+	binary.little_endian_put_u64(mut tmp[1+pad..], d.len<<3) // append length in bits
     d.write(tmp[..1+pad+8])
 
 	// The previous write ensures that a whole number of
@@ -117,7 +117,7 @@ pub fn (d mut Digest) checksum() []byte {
 		panic('d.nx != 0')
 	}
 
-    digest := [byte(0)].repeat(size)
+	mut digest := []byte{len:(size)}
 
 	binary.little_endian_put_u32(mut digest, d.s[0])
 	binary.little_endian_put_u32(mut digest[4..], d.s[1])
@@ -133,7 +133,7 @@ pub fn sum(data []byte) []byte {
 	return d.checksum()
 }
 
-fn block(dig mut Digest, p []byte) {
+fn block(mut dig Digest, p []byte) {
     // For now just use block_generic until we have specific
 	// architecture optimized versions
     block_generic(mut dig, p)

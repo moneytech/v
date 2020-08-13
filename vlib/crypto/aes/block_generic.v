@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
@@ -37,12 +37,10 @@
 
 module aes
 
-import (
-	encoding.binary
-)
+import encoding.binary
 
 // Encrypt one block from src into dst, using the expanded key xk.
-fn encrypt_block_generic(xk []u32, dst, src []byte) {
+fn encrypt_block_generic(xk []u32, mut dst []byte, src []byte) {
 	_ = src[15] // early bounds check
 	mut s0 := binary.big_endian_u32(src[..4])
 	mut s1 := binary.big_endian_u32(src.slice(4, 8))
@@ -63,7 +61,7 @@ fn encrypt_block_generic(xk []u32, dst, src []byte) {
 	mut t1 := u32(0)
 	mut t2 := u32(0)
 	mut t3 := u32(0)
-	for r := 0; r < nr; r++ {
+	for _ in 0..nr {
 		t0 = xk[k+0] ^ te0[byte(s0>>24)] ^ te1[byte(s1>>16)] ^ te2[byte(s2>>8)] ^ u32(te3[byte(s3)])
 		t1 = xk[k+1] ^ te0[byte(s1>>24)] ^ te1[byte(s2>>16)] ^ te2[byte(s3>>8)] ^ u32(te3[byte(s0)])
 		t2 = xk[k+2] ^ te0[byte(s2>>24)] ^ te1[byte(s3>>16)] ^ te2[byte(s0>>8)] ^ u32(te3[byte(s1)])
@@ -86,17 +84,17 @@ fn encrypt_block_generic(xk []u32, dst, src []byte) {
 	s2 ^= xk[k+2]
 	s3 ^= xk[k+3]
 
-	_ = dst[15] // early bounds check
-	binary.big_endian_put_u32(mut dst[..4], s0)
-	binary.big_endian_put_u32(mut dst.slice(4, 8), s1)
-	binary.big_endian_put_u32(mut dst.slice(8, 12), s2)
-	binary.big_endian_put_u32(mut dst.slice(12, 16), s3)
+	_ := dst[15] // early bounds check
+	binary.big_endian_put_u32(mut (*dst)[0..4], s0)
+	binary.big_endian_put_u32(mut (*dst).slice(4, 8), s1)
+	binary.big_endian_put_u32(mut (*dst).slice(8, 12), s2)
+	binary.big_endian_put_u32(mut (*dst).slice(12, 16), s3)
 }
 
 // Decrypt one block from src into dst, using the expanded key xk.
-fn decrypt_block_generic(xk []u32, dst, src []byte) {
+fn decrypt_block_generic(xk []u32, mut dst []byte, src []byte) {
 	_ = src[15] // early bounds check
-	mut s0 := binary.big_endian_u32(src[..4])
+	mut s0 := binary.big_endian_u32(src[0..4])
 	mut s1 := binary.big_endian_u32(src.slice(4, 8))
 	mut s2 := binary.big_endian_u32(src.slice(8, 12))
 	mut s3 := binary.big_endian_u32(src.slice(12, 16))
@@ -115,7 +113,7 @@ fn decrypt_block_generic(xk []u32, dst, src []byte) {
 	mut t1 := u32(0)
 	mut t2 := u32(0)
 	mut t3 := u32(0)
-	for r := 0; r < nr; r++ {
+	for _ in 0..nr {
 		t0 = xk[k+0] ^ td0[byte(s0>>24)] ^ td1[byte(s3>>16)] ^ td2[byte(s2>>8)] ^ u32(td3[byte(s1)])
 		t1 = xk[k+1] ^ td0[byte(s1>>24)] ^ td1[byte(s0>>16)] ^ td2[byte(s3>>8)] ^ u32(td3[byte(s2)])
 		t2 = xk[k+2] ^ td0[byte(s2>>24)] ^ td1[byte(s1>>16)] ^ td2[byte(s0>>8)] ^ u32(td3[byte(s3)])
@@ -139,10 +137,10 @@ fn decrypt_block_generic(xk []u32, dst, src []byte) {
 	s3 ^= xk[k+3]
 
 	_ = dst[15] // early bounds check
-	binary.big_endian_put_u32(mut dst[..4], s0)
-	binary.big_endian_put_u32(mut dst.slice(4, 8), s1)
-	binary.big_endian_put_u32(mut dst.slice(8, 12), s2)
-	binary.big_endian_put_u32(mut dst.slice(12, 16), s3)
+	binary.big_endian_put_u32(mut (*dst)[..4], s0)
+	binary.big_endian_put_u32(mut (*dst).slice(4, 8), s1)
+	binary.big_endian_put_u32(mut (*dst).slice(8, 12), s2)
+	binary.big_endian_put_u32(mut (*dst).slice(12, 16), s3)
 }
 
 // Apply s_box0 to each byte in w.
@@ -154,11 +152,11 @@ fn subw(w u32) u32 {
 }
 
 // Rotate
-fn rotw(w u32) u32 { return u32(w<<8) | u32(w>>24) }
+fn rotw(w u32) u32 { return (w<<8) | (w>>24) }
 
 // Key expansion algorithm. See FIPS-197, Figure 11.
 // Their rcon[i] is our powx[i-1] << 24.
-fn expand_key_generic(key []byte, enc mut []u32, dec mut []u32) {
+fn expand_key_generic(key []byte, mut enc []u32, mut dec []u32) {
 	// Encryption key setup.
 	mut i := 0
 	nk := key.len / 4
@@ -168,7 +166,7 @@ fn expand_key_generic(key []byte, enc mut []u32, dec mut []u32) {
 		}
 		enc[i] = binary.big_endian_u32(key[4*i..])
 	}
-	
+
 	for i < enc.len {
 		mut t := enc[i-1]
 		if i%nk == 0 {
@@ -189,7 +187,7 @@ fn expand_key_generic(key []byte, enc mut []u32, dec mut []u32) {
 	n := enc.len
 	for i = 0; i < n; i += 4 {
 		ei := n - i - 4
-		for j := 0; j < 4; j++ {
+		for j in 0..4 {
 			mut x := enc[ei+j]
 			if i > 0 && i+4 < n {
 				x = td0[s_box0[x>>24]] ^ td1[s_box0[x>>16&0xff]] ^ td2[s_box0[x>>8&0xff]] ^ td3[s_box0[x&u32(0xff)]]

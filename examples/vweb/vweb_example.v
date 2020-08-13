@@ -13,31 +13,35 @@ pub mut:
 }
 
 fn main() {
-	app := App{}
-	vweb.run(mut app, port)
-	//vweb.run<App>(Port)
+	println('vweb example')
+	vweb.run<App>(port)
 }
 
-pub fn (app mut App) init() {
+pub fn (mut app App) init_once() {
 	app.vweb.handle_static('.')
 }
 
-pub fn (app & App) json_endpoint() {
-	app.vweb.json('{"a": 3}')
+pub fn (mut app App) init() {
 }
 
-pub fn (app mut App) index() {
+pub fn (mut app App) json_endpoint() vweb.Result {
+	return app.vweb.json('{"a": 3}')
+}
+
+pub fn (mut app App) index() vweb.Result {
 	app.cnt++
-	$vweb.html()
+	show := true
+	//app.vweb.text('Hello world from vweb')
+	hello := 'Hello world from vweb'
+	numbers := [1,2,3]
+	return $vweb.html()
 }
 
-pub fn (app & App) text() {
-	app.vweb.text('Hello world')
+pub fn (mut app App) text() vweb.Result {
+	return app.vweb.text('Hello world from vweb')
 }
 
-pub fn (app mut App) cookie() {
-	app.vweb.text('Headers:')
-	app.vweb.set_cookie('cookie', 'test')
-	app.vweb.text(app.vweb.headers)
-	app.vweb.text('Text: hello world')
+pub fn (mut app App) cookie() vweb.Result {
+	app.vweb.set_cookie(name:'cookie', value:'test')
+	return app.vweb.text('Headers: $app.vweb.headers')
 }

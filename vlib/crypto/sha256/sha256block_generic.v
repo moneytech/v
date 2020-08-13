@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
@@ -80,11 +80,11 @@ const (
 	]
 )
 
-fn block_generic(dig mut Digest, p_ []byte) {
+fn block_generic(mut dig Digest, p_ []byte) {
 	mut p := p_
 
-	mut w := [u32(0)].repeat(64)
-	
+	mut w := []u32{len:(64)}
+
 	mut h0 := dig.h[0]
 	mut h1 := dig.h[1]
 	mut h2 := dig.h[2]
@@ -97,7 +97,7 @@ fn block_generic(dig mut Digest, p_ []byte) {
 	for p.len >= chunk {
 		// Can interlace the computation of w with the
 		// rounds below if needed for speed.
-		for i := 0; i < 16; i++ {
+		for i in 0..16 {
 			j := i * 4
 			w[i] = u32(p[j]<<24) | u32(p[j+1]<<16) | u32(p[j+2]<<8) | u32(p[j+3])
 		}
@@ -118,7 +118,7 @@ fn block_generic(dig mut Digest, p_ []byte) {
 		mut g := h6
 		mut h := h7
 
-		for i := 0; i < 64; i++ {
+		for i in 0..64 {
 			t1 := h + ((bits.rotate_left_32(e, -6)) ^ (bits.rotate_left_32(e, -11)) ^ (bits.rotate_left_32(e, -25))) + ((e & f) ^ (~e & g)) + u32(_k[i]) + w[i]
 			t2 := ((bits.rotate_left_32(a, -2)) ^ (bits.rotate_left_32(a, -13)) ^ (bits.rotate_left_32(a, -22))) + ((a & b) ^ (a & c) ^ (b & c))
 

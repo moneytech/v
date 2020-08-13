@@ -1,47 +1,73 @@
-fns.txt
-*.dSYM
-*_test
-/v
-/vprod
-/v.c
-/v.*.c
-/v.c.out
-/tools/performance_compare
-/tools/oldv
-/tools/vrepl
-/tools/vtest
-/tools/vtest-compiler
-/tools/vup
-/tools/vpm
-/tools/vcreate
-/tools/vbuild-examples
-/tools/vbuild-tools
-/tools/vbuild-vbinaries
-/v_g
-/v_cg
-/v_prod
-/v_prod_cg
-/v_prod_g
+# ignore all build binaries
+*
+!*/
+!*.*
 *.exe
 *.o
+*.so
 .*.c
 *.tmp.c
-vjs
 *.obj
 *.exp
 *.ilk
 *.pdb
-
-#
-# macOS.gitignore
-#
-# General
-.DS_Store
-
-# Thumbnails
-._*
-.vrepl_temp.v
+*.dll
+*.lib
+*.bak
 a.out
-vlib/os/bare/bare_example_linux
+.noprefix.vrepl_temp
 
-info.log
+# ignore v build files
+/vc
+/v.c
+/v.*.c
+/v.c.out
+.vrepl_temp.v
+fns.txt
+.noprefix.vrepl_temp.v
+
+# ignore temp directories
+/temp
+/tmp
+
+# unignore special files without extension
+!.github/PULL_REQUEST_TEMPLATE
+!.editorconfig
+!.gitattributes
+!.gitignore
+!BSDmakefile
+!Dockerfile
+!Dockerfile.alpine
+!Dockerfile.cross
+!LICENSE
+!Makefile
+
+# ignore editor files
+.idea
+.project
+.classpath
+.c9
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/
+*.code-workspace
+*~
+*.swp
+*.swo
+*.swn
+
+# ignore debugger files
+cachegrind.out.*
+.gdb_history
+*.dSYM
+*.def
+
+# ignore system files
+.DS_Store
+._*
+thumbs.db
+/.symlink
+/.bin
+
+_docs

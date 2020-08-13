@@ -6,22 +6,22 @@ pub fn new() &Clipboard {
 }
 
 // copy some text into the clipboard
-pub fn (cb mut Clipboard) copy(text string) bool {
+pub fn (mut cb Clipboard) copy(text string) bool {
 	return cb.set_text(text)
 }
 
 // get the text from the clipboard
-pub fn (cb mut Clipboard) paste() string {
+pub fn (mut cb Clipboard) paste() string {
 	return cb.get_text()
 }
 
 // clear the clipboard
-pub fn (cb mut Clipboard) clear_all() {
+pub fn (mut cb Clipboard) clear_all() {
 	cb.clear()
 }
 
 // destroy the clipboard
-pub fn (cb mut Clipboard) destroy() {
+pub fn (mut cb Clipboard) destroy() {
 	cb.free()
 }
 
@@ -33,13 +33,4 @@ pub fn (cb Clipboard) check_ownership() bool {
 // check if clipboard can be used
 pub fn (cb &Clipboard) is_available() bool {
 	return cb.check_availability()
-}
-
-// create a new PRIMARY clipboard (only supported on Linux)
-pub fn new_primary() &Clipboard {
-	$if linux {
-		return new_x11_clipboard(.primary)
-	} $else {
-		panic("Primary clipboard is not supported on non-Linux systems.")
-	}
 }

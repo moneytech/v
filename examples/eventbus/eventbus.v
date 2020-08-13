@@ -1,9 +1,6 @@
 module main
 
-import (
-	some_module
-	eventbus
-)
+import some_module
 
 fn main(){
 	mut sub := some_module.get_subscriber()
@@ -11,6 +8,6 @@ fn main(){
 	some_module.do_work()
 }
 
-fn on_error(p eventbus.Params) {
-	println(p.get_string("error"))
+fn on_error(sender voidptr, e &some_module.Error, x voidptr) {
+	println(e.message)
 }

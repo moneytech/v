@@ -1,5 +1,5 @@
 fn main() {
-        for i := 0; i < 3; i++ {
-                println('Hello from V.js')
-        }
+	for i in 0 .. 3 {
+		println('Hello from V.js')
+	}
 }

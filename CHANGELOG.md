@@ -1,7 +1,80 @@
+## V 0.1.27
+*5 May 2020*
+
+- vfmt has been re-written from scratch using the new AST parser. It's much faster, cleaner, and can format
+files with compilation errors.
+- `strconv`, `sprintf`, and `printf` in native V, without any libc calls.
+- Interfaces are now a lot more stable and have all expected features.
+- Lots of x64 backend improvements: function calls, if expressions, for loops, local variables.
+- `map()` and `filter()` methods can now be chained.
+- New `[]int{cap:cap, len:len}` syntax for initializing array length and capacity.
+- New `is` keyword for checking the type of sum types and interfaces.
+- `as` can now be used to cast interfaces and sum types.
+- Profiling with `-profile`. Prints a nice table with detailed information about every single function call:
+number of calls, average time per call, total time per function.
+- `import(xxx)` syntax has been removed in favor of `import xxx` for simplicity and greppability.
+- Lots of fixes and improvements in the type checker.
+- `time.StopWatch`
+- `dl` module for dynamic loading.
+- Automatic `str()` method generation for every single type, including all arrays and fixed size arrays.
+- Short struct initialization syntax for imitating named function args: `foo(bar:0, baz:1)`.
+- New operator `!in`.
+- Performance improvements in critical parts of the builtin data structures (array, map).
+- High order functions improvements (functions can now be returned etc).
+- Anonymous functions that can be defined inside other functions.
+- Built-in JSON module is back.
+- Closures.
+- Lots and lots of new tests added, including output tests that test error messages.
+- Multiple errors are now printed, the compiler no longer stops after the first error.
+- The new JS backend using the AST parser (almost complete).
+- Variadic functions.
+- `net.websocket` module (early stage).
+- `vlib` is now memory leak free, lots of `autofree` improvements.
+- Simplified and cleaned up `cmd/v`, `v.builder`.
+- V UI was updated to work with the new backend.
+
+
+## V 0.1.25
+*1 Apr 2020*
+
+- The entire compiler has been re-written with an AST parser. The code is now a lot cleaner and more maintainable. ~15k lines of old compiler code were removed.
+
+## V 0.1.24
+*31 Dec 2019*
+
+- A new parser/generator built on top of an AST that simplifies code greatly and allows to implement new
+  backends much faster.
+- Sum types (`type Expr = IfExpr | MatchExpr | IntegerLiteral`).
+- B-tree map (sped up the V compiler by ~10%).
+- `v fmt -w`.
+- The entire code base has been formatted with vfmt.
+- Generic structs.
+- SDL module.
+- Arrays of pointers.
+- os: `is_link()`, `is_dir()`, `exists()`.
+- Ranging through fixed size arrays.
+- Lots of fixes in ORM and vweb.
+- The first tutorial: [building a simple web application with vweb](https://github.com/vlang/v/blob/master/tutorials/building-a-simple-web-blog-with-vweb.md).
+- Match expressions now must be exhaustive.
+- freestanding: `malloc()`/`free()`.
+- `++` is now required instead of `+= 1` for consistency.
+- Interpolated strings now allow function calls: `println('val = $get_val()')`.
+- `string.replace_each([])` for an efficient replacement of multiple values.
+- More utf8 helper functions.
+- `-prealloc` option for block allocations.
+- `type` aliases.
+- Running `v` with an unknown command will result in an error.
+- `atof` implementation in pure V.
+- Enums can now have negative values.
+- New `filepath` module.
+- `math.factorial`.
+- `ftp` module.
+- New syntax for casting: `val as Type`.
+- Fewer libc functions used (soon V will have no dependency on libc).
+
+
 ## V 0.1.23
 *30 Nov 2019*
-
-The last release before 0.2.
 
 - [Direct x64 machine code generation](https://github.com/vlang/v/issues/2849). Hello world being built in 3 milliseconds.
 - Bare metal support via the `-freestanding` flag, allowing to build programs without linking to libc.
@@ -18,9 +91,9 @@ The last release before 0.2.
 - Additional compile-time flags: `$if clang, msvc, mingw, x32, x64, big_endian, little_endian {`.
 - All C functions now have to be declared, all missing C functions have been defined.
 - Global variables (only with the `--enable-globals` flag) for low level applications like kernels and drivers.
-- Nothing can be cast to bool (previously code like `if bool(1) {` worked.
+- Nothing can be cast to bool (previously code like `if bool(1) {` worked).
 - `<<` and `>>` now work with all integer types.
-- V detects Cygwin and shows an error. (V supports Windows natively)
+- V detects Cygwin and shows an error (V supports Windows natively).
 - Improved type checking of some operators (`%, |, &` etc).
 - Windows 7 support.
 - `println(true)` now prints `true` instead of `1`.
@@ -47,8 +120,6 @@ The last release before 0.2.
 
 
 
-
-
 ## V 0.1.22
 *28 Oct 2019*
 
@@ -63,8 +134,7 @@ The last release before 0.2.
 - Infinite multi-dimensional arrays (`[][][]int`).
 - `unsafe`.
 - `[deprecated]` attribute.
-- `[if]` function attributes for compile time function exclusion
-for performance.
+- `[if]` function attributes for compile time function exclusion for performance.
 - `switch` has been completely removed from the language and replaced by
 `match` everywhere.
 - `pub struct` and `pub const`, previously all structs and consts were public
@@ -90,7 +160,7 @@ used in some industries.
 - `none` keyword for optionals.
 - Solaris support.
 - All table lookup functions now use `none`.
-- varargs: `fn foo(bar int, params ...string) {`
+- varargs: `fn foo(bar int, params ...string) {`.
 - Double quotes (`"`) can now also be used to denote strings.
 - GitHub Actions CI in addition to Travis.
 - `-compress` option. The V binary built with `-compress` is only ~90 KB!
@@ -122,9 +192,6 @@ V will suggest the correct name.
 - Lots of Microsoft C fixes, and a separate Travis instance for
 this backend.
 - Bitwise operators `|`, `^`, `&` no longer work with booleans.
-
-
-
 
 
 ## V 0.1.19
@@ -162,15 +229,11 @@ this backend.
 - `@FILE, @LINE, @FN, @COLUMN` for debugging.
 
 
-
-
-
-
 ## V 0.1.18
 *16 Aug 2019*
 
-- Built-in ORM (`uk_customers = db.select from Customer where country == 'uk' && nr_orders > 0`)
-- Map initialization syntax: `m := { ‘foo’: ‘bar’, ‘baz’: ‘foo’ }`
+- Built-in ORM (`uk_customers = db.select from Customer where country == 'uk' && nr_orders > 0`).
+- Map initialization syntax: `m := { ‘foo’: ‘bar’, ‘baz’: ‘foo’ }`.
 - `map.delete(key)`.
 - `libcurl` dependency was removed from the `http` module.
 - All function arguments are now immutable by default (previously they could be
@@ -183,7 +246,7 @@ this backend.
 - SChannel support on Windows.
 - `net.urllib` module.
 - vpm package manager, `v install`.
-- `()` are now required in complex bool expressions: `(a && b) || c` instead of `a && b || c
+- `()` are now required in complex bool expressions: `(a && b) || c` instead of `a && b || c`.
 - All arrays now have a default `.str()` method.
 - Bootstrapping V with MSVC.
 - Experimental `≠` etc support.
@@ -192,7 +255,6 @@ this backend.
 - Map struct fields are now initialized automatically, just like arrays.
 - Maps now support array values.
 - `json` functions can no longer be used if the `json` module is not imported.
-
 
 
 ## V 0.1.17
@@ -213,9 +275,6 @@ this backend.
 - Internal modules.
 
 
-
-
-
 ## V 0.1.16
 *23 Jul 2019*
 - V can now be used with Visual Studio!
@@ -234,11 +293,10 @@ this backend.
 - `key in map` syntax (replacing `map.exists(key)`).
 
 
-
 ## V 0.1.15
 *15 Jul 2019*
 - FreeBSD, OpenBSD, NetBSD, DragonFly support.
-- Hot code reloading now works with graphical applications: [bounce.v](https://github.com/vlang/v/blob/master/examples/hot_code_reloading/bounce.v)
+- Hot code reloading now works with graphical applications: [bounce.v](https://github.com/vlang/v/blob/master/examples/hot_code_reloading/bounce.v).
 - VROOT was removed, the installation process is now much simpler.
 - `defer` statement.
 - map.v was re-written. It's now much faster.
@@ -249,16 +307,13 @@ this backend.
 - Submodules and module aliases (`import encoding.base64 as b64`).
 
 
-
-
 ## V 0.1.14
 *12 Jul 2019*
 - `gg` module Windows support, V Tetris runs on Windows.
-- `glad` and `cJSON` are now compiled only once, this makes compilation of programs using `gg` and `json
-  a bit faster.
+- `glad` and `cJSON` are now compiled only once, this makes compilation of programs using `gg` and `json` a bit faster.
 - `v.c` has been cleaned up and minimized (~16k => ~10k lines of code).
 - `type` aliases can now have methods.
-- Const overflow check during compilation (`byte(1000)` will no longer compile)
+- Const overflow check during compilation (`byte(1000)` will no longer compile).
 
 
 ## V 0.1.13
@@ -276,7 +331,7 @@ this backend.
 
 ## V 0.1.12
 *4 Jul 2019*
-- V can finally compile itself on Windows. (https://github.com/vlang/v#mingw-w64)
+- V can finally compile itself on Windows (https://github.com/vlang/v#mingw-w64).
 - `os` module now uses optionals in all functions that return `File`. Lots of  bugs with optionals fixed.
 - `println` was optimized. It no longer results in allocations. Now it also works correctly with all integer types.
 - Lots of `vfmt` fixes, it will be enabled tomorrow.
@@ -287,9 +342,9 @@ this backend.
 ## V 0.1.11
 *1 Jul 2019*
 - Cross compilation for Windows!
-- Lots of Windows fixes
-- socket.v
-- maps fixed
+- Lots of Windows fixes.
+- socket.v.
+- maps fixed.
 
 
 ## V 0.1.9 - 0.1.10
@@ -300,10 +355,12 @@ this backend.
 - One single archive with pre-built binaries for all operating systems.
 - `mut var := val` was fixed (previously `mut var = val` was allowed as well).
 
+
 ## V 0.1.8
 *28 Jun 2019*
 - Single file programs without `fn main` now work as expected.
 - REPL has been fixed: it now supports imports, consts, function definitions, etc.
+
 
 ## V 0.1.7
 *27 Jun 2019*

@@ -1,27 +1,34 @@
 module some_module
 
-import (
-	eventbus
-)
+import eventbus
 
 const (
 	eb = eventbus.new()
 )
 
+pub struct Work {
+	pub:
+	hours int
+}
+
+pub struct Error {
+	pub:
+	message string
+}
+
 pub fn do_work(){
-	mut params := eventbus.Params{}
+	work := Work{20}
 	for i in 0..20 {
 		println("working...")
 		if i == 15 {
-			params.put_string("error", "CRASH!!")
-			eb.publish("error", params)
-			eb.publish("error", params)
+			error := &Error{"There was an error."}
+			eb.publish("error", work, error)
+			eb.publish("error", work, error)
 			return
 		}
 	}
-	
 }
 
 pub fn get_subscriber() eventbus.Subscriber {
-	return eb.subscriber
+	return *eb.subscriber
 }

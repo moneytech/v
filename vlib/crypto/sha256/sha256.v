@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
@@ -51,9 +51,9 @@ mut:
 	is224 bool // mark if this digest is SHA-224
 }
 
-fn (d mut Digest) reset() {
-	d.h = [u32(0)].repeat(8)
-	d.x = [byte(0)].repeat(chunk)
+fn (mut d Digest) reset() {
+	d.h = []u32{len:(8)}
+	d.x = []byte{len:(chunk)}
 	if !d.is224 {
 		d.h[0] = u32(init0)
 		d.h[1] = u32(init1)
@@ -92,7 +92,7 @@ pub fn new224() &Digest {
 	return d
 }
 
-fn (d mut Digest) write(p_ []byte) int {
+fn (mut d Digest) write(p_ []byte) int {
 	mut p := p_
 	nn := p.len
 	d.len += u64(nn)
@@ -141,10 +141,10 @@ fn (d &Digest) sum(b_in []byte) []byte {
 	return b_out
 }
 
-fn (d mut Digest) checksum() []byte {
+fn (mut d Digest) checksum() []byte {
 	mut len := d.len
 	// Padding. Add a 1 bit and 0 bits until 56 bytes mod 64.
-	mut tmp := [byte(0)].repeat(64)
+	mut tmp := []byte{len:(64)}
 	tmp[0] = 0x80
 	if int(len)%64 < 56 {
 		d.write(tmp[..56-int(len)%64])
@@ -161,7 +161,7 @@ fn (d mut Digest) checksum() []byte {
 		panic('d.nx != 0')
 	}
 
-	digest := [byte(0)].repeat(size)
+	mut digest := []byte{len:(size)}
 
 	binary.big_endian_put_u32(mut digest, d.h[0])
 	binary.big_endian_put_u32(mut digest[4..], d.h[1])
@@ -194,12 +194,12 @@ pub fn sum224(data []byte) []byte {
 	mut d := new224()
 	d.write(data)
 	sum := d.checksum()
-	sum224 := [byte(0)].repeat(size224)
+	sum224 := []byte{len:(size224)}
 	copy(sum224, sum[..size224])
 	return sum224
 }
 
-fn block(dig mut Digest, p []byte) {
+fn block(mut dig Digest, p []byte) {
 	// For now just use block_generic until we have specific
 	// architecture optimized versions
 	block_generic(mut dig, p)

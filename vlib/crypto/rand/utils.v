@@ -1,16 +1,14 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
 module rand
 
-import(
-	math.bits
-	encoding.binary
-)
+import math.bits
+import encoding.binary
 
 pub fn int_u64(max u64) ?u64 {
-	bitlen := bits.len64(max)
+	bitlen := bits.len_64(max)
 	if bitlen == 0 {
 		return u64(0)
 	}
@@ -40,16 +38,16 @@ pub fn int_u64(max u64) ?u64 {
 
 fn bytes_to_u64(b []byte) []u64 {
 	ws := 64/8
-	mut z := [u64(0)].repeat((b.len + ws - 1) / ws)
+	mut z := []u64{len:((b.len + ws - 1) / ws)}
 	mut i := b.len
 	for k := 0; i >= ws; k++ {
-		z[k] = binary.big_endian_u64(b.slice(i-ws, i))
+		z[k] = binary.big_endian_u64(b[i-ws..i])
 		i -= ws
 	}
 	if i > 0 {
 		mut d := u64(0)
 		for s := u64(0); i > 0; s += u64(8) {
-			d |= u64(u64(b[i-1]) << s)
+			d |= u64(b[i-1]) << s
 			i--
 		}
 		z[z.len-1] = d

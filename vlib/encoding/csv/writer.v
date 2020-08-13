@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
@@ -7,9 +7,9 @@ module csv
 import strings
 
 struct Writer {
-	sb strings.Builder
-pub:
 mut:
+	sb strings.Builder
+pub mut:
 	use_crlf bool
 	delimiter byte
 }
@@ -22,13 +22,13 @@ pub fn new_writer() &Writer {
 }
 
 // write writes a single record
-pub fn (w mut Writer) write(record []string) ?bool {
+pub fn (mut w Writer) write(record []string) ?bool {
 	if !valid_delim(w.delimiter) {
 		return err_invalid_delim
 	}
 	le := if w.use_crlf { '\r\n' } else { '\n' }
-	for n, _field in record {
-		mut field := _field
+	for n, field_ in record {
+		mut field := field_
 		if n > 0 {
 			w.sb.write(w.delimiter.str())
 		}
@@ -87,6 +87,6 @@ fn (w &Writer) field_needs_quotes(field string) bool {
 	return false
 }
 
-pub fn (w mut Writer) str() string {
+pub fn (mut w Writer) str() string {
 	return w.sb.str()
 }

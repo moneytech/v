@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
@@ -39,9 +39,9 @@ mut:
 	len u64
 }
 
-fn (d mut Digest) reset() {
-	d.x = [byte(0)].repeat(chunk)
-	d.h = [u32(0)].repeat(5)
+fn (mut d Digest) reset() {
+	d.x = []byte{len:(chunk)}
+	d.h = []u32{len:(5)}
 	d.h[0] = u32(init0)
 	d.h[1] = u32(init1)
 	d.h[2] = u32(init2)
@@ -58,7 +58,7 @@ pub fn new() &Digest {
 	return d
 }
 
-pub fn (d mut Digest) write(p_ []byte) int {
+pub fn (mut d Digest) write(p_ []byte) int {
 	mut p := p_
 	nn := p.len
 	d.len += u64(nn)
@@ -67,7 +67,7 @@ pub fn (d mut Digest) write(p_ []byte) int {
 		n := copy(d.x[d.nx..], p)
 		d.nx += n
 		if d.nx == chunk {
-			block(d, d.x)
+			block(mut d, d.x)
 			d.nx = 0
 		}
 		if n >= p.len {
@@ -78,7 +78,7 @@ pub fn (d mut Digest) write(p_ []byte) int {
 	}
 	if p.len >= chunk {
 		n := p.len &~ (chunk - 1)
-		block(d, p[..n])
+		block(mut d, p[..n])
 		if n >= p.len {
 			p = []
 		} else {
@@ -102,10 +102,10 @@ pub fn (d &Digest) sum(b_in []byte) []byte {
 	return b_out
 }
 
-fn (d mut Digest) checksum() []byte {
+fn (mut d Digest) checksum() []byte {
 	mut len := d.len
 	// Padding.  Add a 1 bit and 0 bits until 56 bytes mod 64.
-	mut tmp := [byte(0)].repeat(64)
+	mut tmp := []byte{len:(64)}
 
 	tmp[0] = 0x80
 
@@ -120,7 +120,7 @@ fn (d mut Digest) checksum() []byte {
 	binary.big_endian_put_u64(mut tmp, len)
 	d.write(tmp[..8])
 
-	mut digest := [byte(0)].repeat(size)
+	mut digest := []byte{len:(size)}
 
 	binary.big_endian_put_u32(mut digest, d.h[0])
 	binary.big_endian_put_u32(mut digest[4..], d.h[1])
@@ -138,7 +138,7 @@ pub fn sum(data []byte) []byte {
 	return d.checksum()
 }
 
-fn block(dig &Digest, p []byte) {
+fn block(mut dig Digest, p []byte) {
 	// For now just use block_generic until we have specific
 	// architecture optimized versions
 	block_generic(mut dig, p)

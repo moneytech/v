@@ -1,6 +1,13 @@
 import math
 import math.complex as cmplx
 
+fn tst_res(str1 string, str2 string) bool {
+	if (math.abs(str1.f64() - str2.f64())) < 1e-5 {
+		return true
+	}
+	return false
+}
+
 fn test_complex_addition() {
 	// Test is based on and verified from practice examples of Khan Academy
 	// https://www.khanacademy.org/math/precalculus/imaginary-and-complex-numbers
@@ -48,19 +55,19 @@ fn test_complex_multiplication() {
 	// https://www.khanacademy.org/math/precalculus/imaginary-and-complex-numbers
 	mut c1 := cmplx.complex(1,2)
 	mut c2 := cmplx.complex(1,-4)
-	mut result := c1.multiply(c2)
+	mut result := c1 * c2
 	assert result.equals(cmplx.complex(9,-2))
 	c1 = cmplx.complex(-4,-4)
 	c2 = cmplx.complex(-5,-3)
-	result = c1.multiply(c2)
+	result = c1 * c2
 	assert result.equals(cmplx.complex(8,32))
 	c1 = cmplx.complex(4,4)
 	c2 = cmplx.complex(-2,-5)
-	result = c1.multiply(c2)
+	result = c1 * c2
 	assert result.equals(cmplx.complex(12,-28))
 	c1 = cmplx.complex(2,-2)
 	c2 = cmplx.complex(4,-4)
-	result = c1.multiply(c2)
+	result = c1 * c2
 	assert result.equals(cmplx.complex(0,-16))
 }
 
@@ -69,19 +76,19 @@ fn test_complex_division() {
 	// https://www.khanacademy.org/math/precalculus/imaginary-and-complex-numbers
 	mut c1 := cmplx.complex(-9,-6)
 	mut c2 := cmplx.complex(-3,-2)
-	mut result := c1.divide(c2)
+	mut result := c1 / c2
 	assert result.equals(cmplx.complex(3,0))
 	c1 = cmplx.complex(-23,11)
 	c2 = cmplx.complex(5,1)
-	result = c1.divide(c2)
+	result = c1 / c2
 	assert result.equals(cmplx.complex(-4,3))
 	c1 = cmplx.complex(8,-2)
 	c2 = cmplx.complex(-4,1)
-	result = c1.divide(c2)
+	result = c1 / c2
 	assert result.equals(cmplx.complex(-2,0))
 	c1 = cmplx.complex(11,24)
 	c2 = cmplx.complex(-4,-1)
-	result = c1.divide(c2)
+	result = c1 / c2
 	assert result.equals(cmplx.complex(-4,-5))
 }
 
@@ -115,8 +122,8 @@ fn test_complex_abs() {
 	mut c1 := cmplx.complex(3,4)
 	assert c1.abs() == 5
 	c1 = cmplx.complex(1,2)
-	assert c1.abs().eq(math.sqrt(5))
-	assert c1.abs().eq(c1.conjugate().abs())
+	assert c1.abs() == math.sqrt(5)
+	assert c1.abs() == c1.conjugate().abs()
 	c1 = cmplx.complex(7,0)
 	assert c1.abs() == 7
 }
@@ -125,17 +132,17 @@ fn test_complex_angle(){
 	// Test is based on and verified from practice examples of Khan Academy
 	// https://www.khanacademy.org/math/precalculus/imaginary-and-complex-numbers
 	mut c := cmplx.complex(1, 0)
-	assert (c.angle() * 180 / math.pi).eq(0)
+	assert c.angle() * 180 / math.pi == 0
 	c = cmplx.complex(1, 1)
-	assert (c.angle() * 180 / math.pi).eq(45)
+	assert c.angle() * 180 / math.pi == 45
 	c = cmplx.complex(0, 1)
-	assert (c.angle() * 180 / math.pi).eq(90)
+	assert c.angle() * 180 / math.pi == 90
 	c = cmplx.complex(-1, 1)
-	assert (c.angle() * 180 / math.pi).eq(135)
+	assert c.angle() * 180 / math.pi == 135
 	c = cmplx.complex(-1, -1)
-	assert (c.angle() * 180 / math.pi).eq(-135)
+	assert c.angle() * 180 / math.pi == -135
 	cc := c.conjugate()
-	assert (cc.angle() + c.angle()).eq(0)
+	assert cc.angle() + c.angle() == 0
 }
 
 
@@ -161,6 +168,8 @@ fn test_complex_mulinv() {
 	mut c2 := cmplx.complex(0.067568,-0.094595)
 	mut result := c1.mulinv()
 	// Some issue with precision comparison in f64 using == operator hence serializing to string
+	println(c2.str())
+	println(result.str())
 	assert result.str().eq(c2.str())
 	c1 = cmplx.complex(-3,4)
 	c2 = cmplx.complex(-0.12,-0.16)
@@ -177,14 +186,14 @@ fn test_complex_mod() {
 	mut c1 := cmplx.complex(5,7)
 	mut result := c1.mod()
 	// Some issue with precision comparison in f64 using == operator hence serializing to string
-	assert result.str().eq('8.602325')
+	assert tst_res(result.str(), '8.602325')
 	c1 = cmplx.complex(-3,4)
 	result = c1.mod()
 	assert result == 5
 	c1 = cmplx.complex(-1,-2)
 	result = c1.mod()
 	// Some issue with precision comparison in f64 using == operator hence serializing to string
-	assert result.str().eq('2.236068')
+	assert tst_res(result.str(), '2.236068')
 }
 
 fn test_complex_pow() {
@@ -269,17 +278,17 @@ fn test_complex_arg() {
 	mut c2 := cmplx.complex(2.152033,0.950547)
 	mut result := c1.arg()
 	// Some issue with precision comparison in f64 using == operator hence serializing to string
-	assert result.str().eq('0.950547')
+	assert tst_res(result.str(), '0.950547')
 	c1 = cmplx.complex(-3,4)
 	c2 = cmplx.complex(1.609438,2.214297)
 	result = c1.arg()
 	// Some issue with precision comparison in f64 using == operator hence serializing to string
-	assert result.str().eq('2.214297')
+	assert tst_res(result.str(), '2.214297')
 	c1 = cmplx.complex(-1,-2)
 	c2 = cmplx.complex(0.804719,-2.034444)
 	result = c1.arg()
 	// Some issue with precision comparison in f64 using == operator hence serializing to string
-	assert result.str().eq('-2.034444')
+	assert tst_res(result.str(), '-2.034444')
 }
 
 fn test_complex_log() {

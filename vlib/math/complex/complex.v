@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
@@ -18,12 +18,12 @@ pub fn complex(re f64, im f64) Complex {
 
 // To String method
 pub fn (c Complex) str() string {
-	mut out := '$c.re'
+	mut out := '${c.re:f}'
 	out += if c.im >= 0 {
-		'+$c.im'
+		'+${c.im:f}'
 	}
 	else {
-		'$c.im'
+		'${c.im:f}'
 	}
 	out += 'i'
 	return out
@@ -55,23 +55,21 @@ pub fn (c1 Complex) - (c2 Complex) Complex {
 }
 
 // Complex Multiplication c1 * c2
-// Currently Not Supported
-// pub fn (c1 Complex) * (c2 Complex) Complex {
-// 	return Complex{
-// 		(c1.re * c2.re) + ((c1.im * c2.im) * -1),
-// 		(c1.re * c2.im) + (c1.im * c2.re)
-// 	}
-// }
+pub fn (c1 Complex) * (c2 Complex) Complex {
+	return Complex{
+		(c1.re * c2.re) + ((c1.im * c2.im) * -1),
+		(c1.re * c2.im) + (c1.im * c2.re)
+	}
+}
 
 // Complex Division c1 / c2
-// Currently Not Supported
-// pub fn (c1 Complex) / (c2 Complex) Complex {
-// 	denom := (c2.re * c2.re) + (c2.im * c2.im)
-// 	return Complex {
-// 		((c1.re * c2.re) + ((c1.im * -c2.im) * -1))/denom,
-// 		((c1.re * -c2.im) + (c1.im * c2.re))/denom
-// 	}
-// }
+pub fn (c1 Complex) / (c2 Complex) Complex {
+	denom := (c2.re * c2.re) + (c2.im * c2.im)
+	return Complex {
+		((c1.re * c2.re) + ((c1.im * -c2.im) * -1))/denom,
+		((c1.re * -c2.im) + (c1.im * c2.re))/denom
+	}
+}
 
 // Complex Addition c1.add(c2)
 pub fn (c1 Complex) add(c2 Complex) Complex {
@@ -368,7 +366,7 @@ pub fn (c Complex) asinh() Complex {
 // Based on
 // http://www.suitcaseofdreams.net/Inverse__Hyperbolic_Functions.htm
 pub fn (c Complex) acosh() Complex {
-	if(c.re > 1) {
+	if c.re > 1 {
 		return c.add(
 			c.pow(2)
 			.subtract(complex(1,0))
@@ -393,7 +391,7 @@ pub fn (c Complex) acosh() Complex {
 // http://www.suitcaseofdreams.net/Inverse__Hyperbolic_Functions.htm
 pub fn (c Complex) atanh() Complex {
 	one := complex(1,0)
-	if(c.re < 1) {
+	if c.re < 1 {
 		return complex(1.0/2,0).multiply(
 			one
 			.add(c)
@@ -423,7 +421,7 @@ pub fn (c Complex) atanh() Complex {
 // http://www.suitcaseofdreams.net/Inverse__Hyperbolic_Functions.htm
 pub fn (c Complex) acoth() Complex {
 	one := complex(1,0)
-	if(c.re < 0 || c.re > 1) {
+	if c.re < 0 || c.re > 1 {
 		return complex(1.0/2,0).multiply(
 			c
 			.add(one)
@@ -481,7 +479,7 @@ pub fn (c Complex) acoth() Complex {
 // http://www.suitcaseofdreams.net/Inverse__Hyperbolic_Functions.htm
 pub fn (c Complex) acsch() Complex {
 	one := complex(1,0)
-	if(c.re < 0) {
+	if c.re < 0 {
 		return one.subtract(
 			one.add(
 				c.pow(2)

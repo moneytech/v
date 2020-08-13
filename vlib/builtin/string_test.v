@@ -1,6 +1,12 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
+
+struct Foo {
+	bar int
+mut:
+	str string
+}
 
 fn test_add() {
 	mut a := 'a'
@@ -19,6 +25,12 @@ fn test_add() {
 fn test_ends_with() {
 	a := 'browser.v'
 	assert a.ends_with('.v')
+
+	s := 'V Programming Language'
+	assert s.ends_with('guage') == true
+	assert s.ends_with('Language') == true
+	assert s.ends_with('Programming Language') == true
+	assert s.ends_with('V') == false
 }
 
 fn test_between() {
@@ -103,6 +115,7 @@ fn test_split_nth() {
 	assert (b.split_nth('::', 2).len == 2)
 	assert (b.split_nth('::', 10).len == 3)
 	c := "ABCDEF"
+	println(c.split('').len)
 	assert (c.split('').len == 6)
 	assert (c.split_nth('', 3).len == 3)
 	assert (c.split_nth('BC', -1).len == 2)
@@ -116,6 +129,37 @@ fn test_split_nth() {
 	// assert (e.split_nth(',,', 3).len == 2)
 	assert (e.split_nth(',', -1).len == 12)
 	assert (e.split_nth(',', 3).len == 3)
+}
+
+fn test_split_nth_values() {
+	line := 'CMD=eprintln(phase=1)'
+
+	a0 := line.split_nth('=', 0)
+	assert a0.len == 3
+	assert a0[0] == 'CMD'
+	assert a0[1] == 'eprintln(phase'
+	assert a0[2] == '1)'
+
+	a1 := line.split_nth('=', 1)
+	assert a1.len == 1
+	assert a1[0] == 'CMD=eprintln(phase=1)'
+
+	a2 := line.split_nth('=', 2)
+	assert a2.len == 2
+	assert a2[0] == 'CMD'
+	assert a2[1] == 'eprintln(phase=1)'
+
+	a3 := line.split_nth('=', 3)
+	assert a3.len == 3
+	assert a3[0] == 'CMD'
+	assert a3[1] == 'eprintln(phase'
+	assert a3[2] == '1)'
+
+	a4 := line.split_nth('=', 4)
+	assert a4.len == 3
+	assert a4[0] == 'CMD'
+	assert a4[1] == 'eprintln(phase'
+	assert a4[2] == '1)'
 }
 
 fn test_split() {
@@ -217,6 +261,30 @@ fn test_replace() {
 	assert b.replace('charptr', 'byteptr') == '*byteptr'
 	c :='abc'
 	assert c.replace('','-') == c
+	v :='a   b c d'
+	assert v.replace('  ',' ') == 'a  b c d'
+
+}
+
+fn test_replace_each() {
+	s := 'hello man man :)'
+	q := s.replace_each([
+		'man', 'dude',
+		'hello', 'hey'
+	])
+	assert q == 'hey dude dude :)'
+	bb := '[b]bold[/b] [code]code[/code]'
+	assert bb.replace_each([
+		'[b]', '<b>',
+		'[/b]', '</b>',
+		'[code]', '<code>',
+		'[/code]', '</code>'
+	]) == '<b>bold</b> <code>code</code>'
+	bb2 := '[b]cool[/b]'
+	assert bb2.replace_each([
+		'[b]', '<b>',
+		'[/b]', '</b>',
+	]) == '<b>cool</b>'
 }
 
 fn test_itoa() {
@@ -269,50 +337,45 @@ fn test_runes() {
 	assert last.len == 2
 }
 
-fn test_lower() {
-	mut s := 'A'
-	assert s.to_lower() == 'a'
-	assert s.to_lower().len == 1
-	s = 'HELLO'
-	assert s.to_lower() == 'hello'
-	assert s.to_lower().len == 5
-	s = 'Aloha'
-	assert s.to_lower() == 'aloha'
-	s = 'Have A nice Day!'
-	assert s.to_lower() == 'have a nice day!'
-	s = 'hi'
-	assert s.to_lower() == 'hi'
-}
-
-fn test_upper() {
-	mut s := 'a'
-	assert s.to_upper() == 'A'
-	assert s.to_upper().len == 1
-	s = 'hello'
-	assert s.to_upper() == 'HELLO'
-	assert s.to_upper().len == 5
-	s = 'Aloha'
-	assert s.to_upper() == 'ALOHA'
-	s = 'have a nice day!'
-	assert s.to_upper() == 'HAVE A NICE DAY!'
-	s = 'hi'
-	assert s.to_upper() == 'HI'
-
-}
-
 fn test_left_right() {
 	s := 'ALOHA'
 	assert s.left(3) == 'ALO'
+	assert s.left(0) == ''
+	assert s.left(8) == s
+	assert s.right(3) == 'HA'
+	assert s.right(6) == ''
 	assert s[3..] == 'HA'
 	u := s.ustring()
 	assert u.left(3) == 'ALO'
+	assert u.left(0) == ''
+	assert s.left(8) == s
 	assert u.right(3) == 'HA'
+	assert u.right(6) == ''
 }
 
 fn test_contains() {
 	s := 'view.v'
 	assert s.contains('vi')
 	assert !s.contains('random')
+	assert ''.contains('')
+	assert 'abc'.contains('')
+}
+
+fn test_contains_any() {
+	assert !'team'.contains_any('i')
+	assert 'fail'.contains_any('ui')
+	assert 'ure'.contains_any('ui')
+	assert 'failure'.contains_any('ui')
+	assert !'foo'.contains_any('')
+	assert !''.contains_any('')
+}
+
+fn test_contains_any_substr() {
+	s := 'Some random text'
+	assert s.contains_any_substr(['false', 'not', 'rand'])
+	assert !s.contains_any_substr(['ABC', 'invalid'])
+	assert ''.contains_any_substr([])
+	assert 'abc'.contains_any_substr([''])
 }
 
 fn test_arr_contains() {
@@ -327,17 +390,34 @@ fn test_to_num() {
 	assert s.int() == 7
 	assert s.u64() == 7
 	f := '71.5 hasdf'
+	// QTODO
 	assert f.f32() == 71.5
-	b := 1.52345
-	mut a := '${b:.03f}'
-	assert a == '1.523'
-	num := 7
-	a = '${num:03d}'
 	vals := ['9']
 	assert vals[0].int() == 9
 	big := '93993993939322'
 	assert big.u64() == 93993993939322
 	assert big.i64() == 93993993939322
+}
+
+fn test_inter_format_string() {
+	float_num := 1.52345
+	float_num_string := '-${float_num:.03f}-'
+	assert float_num_string == '-1.523-'
+	int_num := 7
+	int_num_string := '-${int_num:03d}-'
+	assert int_num_string == '-007-'
+	ch := `a`
+	ch_string := '-${ch:c}-'
+	assert ch_string == '-a-'
+	hex_n := 192
+	hex_n_string := '-${hex_n:x}-'
+	assert hex_n_string == '-c0-'
+	oct_n := 192
+	oct_n_string := '-${oct_n:o}-'
+	assert oct_n_string == '-300-'
+	str := 'abc'
+	str_string := '-${str:s}-'
+	assert str_string == '-abc-'
 }
 
 fn test_hash() {
@@ -369,6 +449,7 @@ fn test_trim_left() {
 	// test cutset
 	s = 'banana'
 	assert s.trim_left('ba') == 'nana'
+	assert s.trim_left('ban') == ''
 }
 
 fn test_trim_right() {
@@ -379,51 +460,52 @@ fn test_trim_right() {
 	// test cutset
 	s = 'banana'
 	assert s.trim_right('na') == 'b'
+	assert s.trim_right('ban') == ''
+}
+
+fn test_all_before() {
+	s := 'fn hello fn'
+	assert s.all_before(' ') == 'fn'
+	assert s.all_before('2') == s
+	assert s.all_before('') == s
+}
+
+fn test_all_before_last() {
+	s := 'fn hello fn'
+	assert s.all_before_last(' ') == 'fn hello'
+	assert s.all_before_last('2') == s
+	assert s.all_before_last('') == s
 }
 
 fn test_all_after() {
 	s := 'fn hello'
-	q := s.all_after('fn ')
-	assert q == 'hello'
+	assert s.all_after('fn ') == 'hello'
+	assert s.all_after('test') == s
+	assert s.all_after('') == s
+	assert s.after('e') == 'llo'
+	x := s.after('e')
+	assert x == 'llo'
 }
 
 fn test_reverse() {
-	s := 'hello'
-	assert s.reverse() == 'olleh'
-	t := ''
-	assert t.reverse() == t
-}
-
-
-struct Foo {
-	bar int
-}
-
-fn (f Foo) baz() string {
-	return 'baz'
-}
-
-fn test_interpolation() {
-	num := 7
-	mut s := 'number=$num'
-	assert s == 'number=7'
-	foo := Foo{}
-	s = 'baz=${foo.baz()}'
-	assert s == 'baz=baz'
-
+	assert 'hello'.reverse() == 'olleh'
+	assert ''.reverse() == ''
+	assert 'a'.reverse() == 'a'
 }
 
 fn test_bytes_to_string() {
-	mut buf := calloc(10)
-	buf[0] = `h`
-	buf[1] = `e`
-	buf[2] = `l`
-	buf[3] = `l`
-	buf[4] = `o`
-	assert string(buf) == 'hello'
-	assert string(buf, 2) == 'he'
+	mut buf := vcalloc(10)
+	unsafe {
+		buf[0] = `h`
+		buf[1] = `e`
+		buf[2] = `l`
+		buf[3] = `l`
+		buf[4] = `o`
+	}
+	assert unsafe { buf.vstring() } == 'hello'
+	assert unsafe { buf.vstring_with_len(2) } == 'he'
 	bytes := [`h`, `e`, `l`, `l`, `o`]
-	assert string(bytes, 5) == 'hello'
+	assert bytes.bytestr() == 'hello'
 }
 
 fn test_count() {
@@ -436,21 +518,79 @@ fn test_count() {
 	assert 'bbaabb'.count('aa') == 1
 }
 
+fn test_lower() {
+	mut s := 'A'
+	assert !s.is_lower()
+	assert s.to_lower() == 'a'
+	assert s.to_lower().len == 1
+	s = 'HELLO'
+	assert !s.is_lower()
+	assert s.to_lower() == 'hello'
+	assert s.to_lower().len == 5
+	s = 'Aloha'
+	assert !s.is_lower()
+	assert s.to_lower() == 'aloha'
+	s = 'Have A nice Day!'
+	assert !s.is_lower()
+	assert s.to_lower() == 'have a nice day!'
+	s = 'hi'
+	assert s.is_lower()
+	assert s.to_lower() == 'hi'
+	assert 'aloha!'[0] == `a`
+	assert 'aloha!'[5] == `!`
+}
+
+fn test_upper() {
+	mut s := 'a'
+	assert !s.is_upper()
+	assert s.to_upper() == 'A'
+	assert s.to_upper().len == 1
+	s = 'hello'
+	assert !s.is_upper()
+	assert s.to_upper() == 'HELLO'
+	assert s.to_upper().len == 5
+	s = 'Aloha'
+	assert !s.is_upper()
+	assert s.to_upper() == 'ALOHA'
+	s = 'have a nice day!'
+	assert !s.is_upper()
+	assert s.to_upper() == 'HAVE A NICE DAY!'
+	s = 'HI'
+	assert s.is_upper()
+	assert s.to_upper() == 'HI'
+}
+
 fn test_capitalize() {
 	mut s := 'hello'
+	assert !s.is_capital()
 	assert s.capitalize() == 'Hello'
 	s = 'test'
+	assert !s.is_capital()
 	assert s.capitalize() == 'Test'
     s = 'i am ray'
+	assert !s.is_capital()
 	assert s.capitalize() == 'I am ray'
+	s = ''
+	assert !s.is_capital()
+	assert s.capitalize() == ''
+	s = 'TEST IT'
+	assert !s.is_capital()
+	assert s.capitalize() == 'TEST IT'
+	s = 'Test it'
+	assert s.is_capital()
+	assert s.capitalize() == 'Test it'
+	assert 'GameMission_t'.capitalize() == 'GameMission_t'
 }
 
 fn test_title() {
-	s := 'hello world'
+	mut s := 'hello world'
+	assert !s.is_title()
 	assert s.title() == 'Hello World'
-	s.to_upper()
-	assert s.title() == 'Hello World'
-	s.to_lower()
+	s = 'HELLO WORLD'
+	assert !s.is_title()
+	assert s.title() == 'HELLO WORLD'
+	s = 'Hello World'
+	assert s.is_title()
 	assert s.title() == 'Hello World'
 }
 
@@ -480,7 +620,10 @@ fn test_quote() {
 	assert a.str() == '\''
 }
 
+
 fn test_ustring_comparisons() {
+	/*
+	QTODO
 	assert ('h€llô !'.ustring() == 'h€llô !'.ustring()) == true
 	assert ('h€llô !'.ustring() == 'h€llô'.ustring()) == false
 	assert ('h€llô !'.ustring() == 'h€llo !'.ustring()) == false
@@ -502,6 +645,7 @@ fn test_ustring_comparisons() {
 	assert ('h€llô!'.ustring() >= 'h€llô'.ustring()) == true
 	assert ('h€llô'.ustring() >= 'h€llô'.ustring()) == true
 	assert ('h€llô'.ustring() >= 'h€llô!'.ustring()) == false
+	*/
 }
 
 fn test_ustring_count() {
@@ -513,16 +657,76 @@ fn test_ustring_count() {
 	assert (a.count('a'.ustring())) == 0
 }
 
+fn test_limit() {
+	s := 'hello'
+	assert s.limit(2) == 'he'
+	assert s.limit(9) == s
+	assert s.limit(0) == ''
+	// assert s.limit(-1) == ''
+}
+
 fn test_repeat() {
-	s := 'V! '
-	assert s.repeat(5) == 'V! V! V! V! V! '
+	s1 := 'V! '
+	assert s1.repeat(5) == 'V! V! V! V! V! '
+	assert s1.repeat(1) == s1
+	assert s1.repeat(0) == ''
+	s2 := ''
+	assert s2.repeat(5) == s2
+	assert s2.repeat(1) == s2
+	assert s2.repeat(0) == s2
+	// TODO Add test for negative values
+}
+
+fn test_starts_with() {
+	s := 'V Programming Language'
+	assert s.starts_with('V') == true
+	assert s.starts_with('V Programming') == true
+	assert s.starts_with('Language') == false
+}
+
+fn test_trim_prefix() {
+	s := 'V Programming Language'
+	assert s.trim_prefix('V ') == 'Programming Language'
+	assert s.trim_prefix('V Programming ') == 'Language'
+	assert s.trim_prefix('Language') == s
+
+	s2 := 'TestTestTest'
+	assert s2.trim_prefix('Test') == 'TestTest'
+	assert s2.trim_prefix('TestTest') == 'Test'
+
+	s3 := '123Test123Test'
+	assert s3.trim_prefix('123') == 'Test123Test'
+	assert s3.trim_prefix('123Test') == '123Test'
+}
+
+fn test_trim_suffix() {
+	s := 'V Programming Language'
+	assert s.trim_suffix(' Language') == 'V Programming'
+	assert s.trim_suffix(' Programming Language') == 'V'
+	assert s.trim_suffix('V') == s
+
+	s2 := 'TestTestTest'
+	assert s2.trim_suffix('Test') == 'TestTest'
+	assert s2.trim_suffix('TestTest') == 'Test'
+
+	s3 := '123Test123Test'
+	assert s3.trim_suffix('123') == s3
+	assert s3.trim_suffix('123Test') == '123Test'
 }
 
 fn test_raw() {
 	raw := r'raw\nstring'
 	lines := raw.split('\n')
+	println(lines)
 	assert lines.len == 1
 	println('raw string: "$raw"')
+}
+
+fn test_raw_with_quotes() {
+	raw := r"some'" + r'"thing' // " should be escaped in the generated C code
+	assert raw[0] == `s`
+	assert raw[5] == `"`
+	assert raw[6] == `t`
 }
 
 fn test_escape() {
@@ -563,6 +767,7 @@ fn test_inter_before_comp_if() {
 	$if linux {
 		println(s)
 	}
+	assert s == '123'
 }
 
 fn test_double_quote_inter() {
@@ -573,3 +778,113 @@ fn test_double_quote_inter() {
 	assert '${a} ${b}' == "1 2"
 }
 
+fn test_string_map() {
+	$if windows {
+		return // TODO
+	}
+	original := 'Hello'
+	println('original.len = $original.len')
+	a := original.map(fn (b byte) byte {
+		return b + 1
+	})
+	expected := 'Ifmmp'
+	println('a[0] = ' + a[0].str())
+	println('a[1] = ' + a[1].str())
+	println('a[2] = ' + a[2].str())
+	println('a[3] = ' + a[3].str())
+	println('a[4] = ' + a[4].str())
+	println('a.len = $a.len')
+	assert a.len == expected.len
+	assert a == expected
+
+	assert 'foo'.map(foo) == r'\ee'
+}
+
+fn foo(b byte) byte {
+	return b - 10
+}
+
+fn test_string_filter() {
+	foo := 'V is awesome!!!!'.filter(fn (b byte) bool {
+		return b != `!`
+	})
+	assert foo == 'V is awesome'
+	assert 'Alexander'.filter(filter) == 'Alexnder'
+}
+
+fn filter(b byte) bool {
+	return b != `a`
+}
+
+fn test_split_into_lines() {
+	line_content := 'Line'
+	text_crlf := '${line_content}\r\n${line_content}\r\n${line_content}'
+	lines_crlf := text_crlf.split_into_lines()
+
+	assert lines_crlf.len == 3
+	for line in lines_crlf {
+		assert line == line_content
+	}
+
+	text_lf := '${line_content}\n${line_content}\n${line_content}'
+	lines_lf := text_lf.split_into_lines()
+
+	assert lines_lf.len == 3
+	for line in lines_lf {
+		assert line == line_content
+	}
+}
+
+fn test_string_literal_with_backslash(){
+    a := 'Hello\
+          World'
+    assert a == 'HelloWorld'
+
+	b := 'One\
+		  Two\
+		  Three'
+	assert b == 'OneTwoThree'
+}
+
+/*
+type MyString string
+
+fn test_string_alias() {
+	s := MyString('hi')
+	ss := s + '!'
+}
+*/
+
+// sort an array of structs, by their string field values
+
+struct Ka {
+	s string
+	i int
+}
+
+fn test_sorter() {
+	mut arr := [
+		Ka{
+			s: 'bbb'
+			i: 100
+		},
+		Ka{
+			s: 'aaa'
+			i: 101
+		},
+		Ka{
+			s: 'ccc'
+			i: 102
+		}
+	]
+	cmp := fn (a, b &Ka) int {
+		return compare_strings(a.s, b.s)
+	}
+	arr.sort_with_compare(cmp)
+	assert arr[0].s == 'aaa'
+	assert arr[0].i == 101
+	assert arr[1].s == 'bbb'
+	assert arr[1].i == 100
+	assert arr[2].s == 'ccc'
+	assert arr[2].i == 102
+}

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
@@ -22,7 +22,7 @@ fn main() {
 		m[word] = m[word] + 1 // TODO m[key]++
 	}
 	// Sort the keys
-	mut keys := m.keys() 
+	mut keys := m.keys()
 	keys.sort()
 	// Print the map
 	for key in keys {
@@ -33,7 +33,7 @@ fn main() {
 
 // Creates an array of words from a given string
 fn extract_words(contents string) []string {
-	mut splitted := []string
+	mut splitted := []string{}
 	for space_splitted in contents.to_lower().split(' ') {
 		if space_splitted.contains('\n') {
 			splitted << space_splitted.split('\n')
@@ -43,7 +43,7 @@ fn extract_words(contents string) []string {
 		}
 	}
 
-	mut results := []string
+	mut results := []string{}
 	for s in splitted {
 		result := filter_word(s)
 		if result == '' {

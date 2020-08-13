@@ -22,6 +22,22 @@ pub fn tos(s byteptr, len int) string {
 	}
 }
 
+fn (s string) add(a string) string {
+	new_len := a.len + s.len
+	mut res := string {
+		len: new_len
+		str: malloc(new_len + 1)
+	}
+	for j in 0..s.len {
+		res[j] = s[j]
+	}
+	for j in 0..a.len {
+		res[s.len + j] = a[j]
+	}
+	res[new_len] = `\0`// V strings are not null terminated, but just in case
+	return res
+}
+
 /*
 pub fn tos_clone(s byteptr) string {
 	if s == 0 {
@@ -85,7 +101,7 @@ pub fn i64_tos(buf byteptr, len int, n0 i64, base int) string {
 		n /= base
 		if n < 1 {break}
 	}
-	if (neg) {
+	if neg {
 		if i < 0 { panic ("buffer to small") }
 		b[i--] = 45
 	}
@@ -98,6 +114,13 @@ pub fn i64_tos(buf byteptr, len int, n0 i64, base int) string {
 pub fn i64_str(n0 i64, base int) string {
 	buf := malloc(80)
 	return i64_tos(buf, 79, n0, base)
+}
+
+pub fn ptr_str(ptr voidptr) string {
+  buf := [16]byte
+  hex := i64_tos(buf, 15, i64(ptr), 16)
+  res := '0x' + hex
+  return res
 }
 
 pub fn (a string) clone() string {

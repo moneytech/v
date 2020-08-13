@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Alexander Medvednikov. All rights reserved.
+// Copyright (c) 2019-2020 Alexander Medvednikov. All rights reserved.
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 
@@ -13,10 +13,8 @@
 
 module aes
 
-import (
-	crypto.cipher
-	crypto.internal.subtle
-)
+import crypto.cipher
+import crypto.internal.subtle
 
 struct AesCbc {
 mut:
@@ -32,7 +30,7 @@ fn new_aes_cbc(b AesCipher, iv []byte) AesCbc {
 		b:          b,
 		block_size: b.block_size(),
 		iv:         iv.clone(),
-		tmp:        [byte(0)].repeat(b.block_size()),
+		tmp:        []byte{len:(b.block_size()),}
 	}
 }
 
@@ -48,7 +46,8 @@ pub fn new_cbc(b AesCipher, iv []byte) AesCbc {
 
 pub fn (x &AesCbc) block_size() int { return x.block_size }
 
-pub fn (x &AesCbc) encrypt_blocks(dst mut []byte, src_ []byte) {
+pub fn (x &AesCbc) encrypt_blocks(mut dst_ []byte, src_ []byte) {
+	mut dst := *dst_
 	mut src := src_
 	if src.len%x.block_size != 0 {
 		panic('crypto.cipher: input not full blocks')
@@ -56,7 +55,7 @@ pub fn (x &AesCbc) encrypt_blocks(dst mut []byte, src_ []byte) {
 	if dst.len < src.len {
 		panic('crypto.cipher: output smaller than input')
 	}
-	if subtle.inexact_overlap(dst[..src.len], src) {
+	if subtle.inexact_overlap(dst[..src.len], src_) {
 		panic('crypto.cipher: invalid buffer overlap')
 	}
 
@@ -65,7 +64,7 @@ pub fn (x &AesCbc) encrypt_blocks(dst mut []byte, src_ []byte) {
 	for src.len > 0 {
 		// Write the xor to dst, then encrypt in place.
 		cipher.xor_bytes(mut dst[..x.block_size], src[..x.block_size], iv)
-		x.b.encrypt(dst[..x.block_size], dst[..x.block_size])
+		x.b.encrypt(mut dst[..x.block_size], mut dst[..x.block_size])
 
 		// Move to the next block with this block as the next iv.
 		iv = dst[..x.block_size]
@@ -74,21 +73,21 @@ pub fn (x &AesCbc) encrypt_blocks(dst mut []byte, src_ []byte) {
 		} else {
 			src = src[x.block_size..]
 		}
-		*dst = dst[x.block_size..]
+		dst = dst[x.block_size..]
 	}
 
 	// Save the iv for the next crypt_blocks call.
 	copy(x.iv, iv)
 }
 
-pub fn (x mut AesCbc) decrypt_blocks(dst mut []byte, src []byte) {
+pub fn (mut x AesCbc) decrypt_blocks(mut dst []byte, src []byte) {
 	if src.len%x.block_size != 0 {
 		panic('crypto.cipher: input not full blocks')
 	}
 	if dst.len < src.len {
 		panic('crypto.cipher: output smaller than input')
 	}
-	if subtle.inexact_overlap(dst[..src.len], src) {
+	if subtle.inexact_overlap((*dst)[..src.len], src) {
 		panic('crypto.cipher: invalid buffer overlap')
 	}
 	if src.len == 0 {
@@ -106,8 +105,8 @@ pub fn (x mut AesCbc) decrypt_blocks(dst mut []byte, src []byte) {
 
 	// Loop over all but the first block.
 	for start > 0 {
-		x.b.decrypt(dst.slice(start, end), src.slice(start, end))
-		cipher.xor_bytes(mut dst.slice(start, end), dst.slice(start, end), src.slice(prev, start))
+		x.b.decrypt(mut (*dst).slice(start, end), mut src.slice(start, end))
+		cipher.xor_bytes(mut (*dst).slice(start, end), (*dst).slice(start, end), src.slice(prev, start))
 
 		end = start
 		start = prev
@@ -115,8 +114,8 @@ pub fn (x mut AesCbc) decrypt_blocks(dst mut []byte, src []byte) {
 	}
 
 	// The first block is special because it uses the saved iv.
-	x.b.decrypt(dst.slice(start, end), src.slice(start, end))
-	cipher.xor_bytes(mut dst.slice(start, end), dst.slice(start, end), x.iv)
+	x.b.decrypt(mut (*dst).slice(start, end), mut src.slice(start, end))
+	cipher.xor_bytes(mut (*dst).slice(start, end), (*dst).slice(start, end), x.iv)
 
 
 	// Set the new iv to the first block we copied earlier.
